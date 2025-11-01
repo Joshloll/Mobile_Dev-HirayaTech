@@ -4,10 +4,65 @@ import 'package:mobiledev_ecowaste/models/user_model.dart';
 import 'package:mobiledev_ecowaste/profile/edit_profile_page.dart';
 import 'package:mobiledev_ecowaste/settings/settings_page.dart';
 import 'package:mobiledev_ecowaste/support/help_support_page.dart';
-import 'package:mobiledev_ecowaste/recycling_finder/recycling_finder_page.dart'; // <-- NEW IMPORT
+import 'package:mobiledev_ecowaste/recycling_finder/recycling_finder_page.dart';
+import 'package:mobiledev_ecowaste/services/supabase_service.dart';
 
-class AppDrawer extends StatelessWidget {
+class AppDrawer extends StatefulWidget {
   const AppDrawer({super.key});
+
+  @override
+  State<AppDrawer> createState() => _AppDrawerState();
+}
+
+class _AppDrawerState extends State<AppDrawer> {
+  final _supabaseService = SupabaseService();
+  UserProfile? _userProfile;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserProfile();
+  }
+
+  Future<void> _loadUserProfile() async {
+    final user = _supabaseService.currentUser;
+    if (user != null) {
+      final profileData = await _supabaseService.getUserProfile(user.id);
+      if (profileData != null && mounted) {
+        setState(() {
+          _userProfile = UserProfile.fromJson(profileData);
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _handleLogout() async {
+    // Show confirmation dialog
+    final shouldLogout = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Logout'),
+        content: const Text('Are you sure you want to logout?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Logout', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldLogout == true) {
+      await _supabaseService.signOut();
+      // The AuthWrapper will automatically handle navigation to login screen
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -22,17 +77,23 @@ class AppDrawer extends StatelessWidget {
                 _buildDrawerItem(
                   icon: Icons.edit_outlined,
                   text: 'Edit Profile',
-                  onTap: () {
+                  onTap: () async {
                     Navigator.of(context).pop();
-                    Navigator.push(context, MaterialPageRoute(builder: (context) => const EditProfilePage()));
+                    final result = await Navigator.push(
+                      context, 
+                      MaterialPageRoute(builder: (context) => const EditProfilePage())
+                    );
+                    // Reload profile if edit was successful
+                    if (result == true) {
+                      _loadUserProfile();
+                    }
                   },
                 ),
-                // --- THIS ITEM IS NOW FUNCTIONAL ---
                 _buildDrawerItem(
                     icon: Icons.recycling_outlined,
                     text: 'Find Recycling Centers',
                     onTap: () {
-                      Navigator.of(context).pop(); // Close the drawer first
+                      Navigator.of(context).pop();
                       Navigator.push(context, MaterialPageRoute(builder: (context) => const RecyclingFinderPage()));
                     }),
                 _buildDrawerItem(
@@ -60,6 +121,7 @@ class AppDrawer extends StatelessWidget {
             text: 'Logout',
             onTap: () {
               Navigator.of(context).pop();
+              _handleLogout();
             },
             color: Colors.red.shade700,
           ),
@@ -76,28 +138,36 @@ class AppDrawer extends StatelessWidget {
       decoration: const BoxDecoration(
         color: Color(0xFF1D3557),
       ),
-      child: Column(
-        children: [
-          CircleAvatar(
-            radius: 40,
-            backgroundImage: NetworkImage(currentUser.avatarUrl),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            currentUser.name,
-            style: GoogleFonts.splineSans(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-              fontSize: 20,
+      child: _isLoading
+          ? const Column(
+              children: [
+                CircularProgressIndicator(color: Colors.white),
+                SizedBox(height: 12),
+                Text('Loading...', style: TextStyle(color: Colors.white)),
+              ],
+            )
+          : Column(
+              children: [
+                CircleAvatar(
+                  radius: 40,
+                  backgroundImage: NetworkImage(_userProfile?.avatarUrl ?? 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200'),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  _userProfile?.name ?? 'User',
+                  style: GoogleFonts.splineSans(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 20,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _userProfile?.email ?? '',
+                  style: TextStyle(color: Colors.white.withOpacity(0.7)),
+                ),
+              ],
             ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            currentUser.email,
-            style: TextStyle(color: Colors.white.withOpacity(0.7)),
-          ),
-        ],
-      ),
     );
   }
 

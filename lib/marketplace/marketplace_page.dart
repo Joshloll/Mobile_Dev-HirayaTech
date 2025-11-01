@@ -1,19 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:mobiledev_ecowaste/community_feed/community_feed_page.dart';
+import 'package:mobiledev_ecowaste/community_feed/functional_community_feed_page.dart';
 import 'package:mobiledev_ecowaste/donate/donate_page.dart';
 import 'package:mobiledev_ecowaste/impact/impact_page.dart';
 import 'package:mobiledev_ecowaste/profile/profile_page.dart';
 import 'package:mobiledev_ecowaste/widgets/app_drawer.dart';
-import 'package:provider/provider.dart';
-import 'package:mobiledev_ecowaste/theme.dart';
 
-import 'add_listing/add_listing_step1_page.dart';
-import 'add_listing/listing_form_provider.dart';
 import 'chats_list_page.dart';
-import 'device_details_page.dart';
-import 'package:mobiledev_ecowaste/community_feed/create_post/create_post_page.dart';
-import 'all_devices_page.dart';
+import 'simple_listing/listing_type_selection_page.dart';
+import 'simple_listing/listings_feed_page.dart';
 
 class MarketplacePage extends StatefulWidget {
   const MarketplacePage({super.key});
@@ -26,8 +20,8 @@ class _MarketplacePageState extends State<MarketplacePage> {
   int _bottomNavIndex = 0;
 
   final List<Widget> _pages = const <Widget>[
-    _MarketplaceBody(),
-    CommunityFeedPage(),
+    ListingsFeedPage(),
+    FunctionalCommunityFeedPage(),
     DonatePage(),
     ImpactPage(),
     ProfilePage(),
@@ -44,36 +38,7 @@ class _MarketplacePageState extends State<MarketplacePage> {
     switch (_bottomNavIndex) {
       case 1:
         title = 'Community';
-        actions = [
-          Builder(
-            builder: (context) => IconButton(
-              icon: const Icon(Icons.add_circle_outline),
-              onPressed: () async {
-                final result = await Navigator.push<String>(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const CreatePostPage(),
-                    fullscreenDialog: true,
-                  ),
-                );
-
-                if (result == 'posted_successfully' && mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: const Text('Posted successfully!'),
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      duration: const Duration(seconds: 2),
-                      backgroundColor: Theme.of(context).colorScheme.primary,
-                    ),
-                  );
-                }
-              },
-            ),
-          ),
-        ];
+        actions = []; // FAB is now in the community page itself
         break;
       case 2:
         title = 'Donation Tracker';
@@ -140,10 +105,7 @@ class _MarketplacePageState extends State<MarketplacePage> {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => ChangeNotifierProvider(
-                create: (_) => ListingFormProvider(),
-                child: const AddListingStep1Page(),
-              ),
+              builder: (context) => const ListingTypeSelectionPage(),
             ),
           );
         },

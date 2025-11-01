@@ -1,6 +1,9 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:mobiledev_ecowaste/models/user_model.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:mobiledev_ecowaste/services/supabase_service.dart';
 
 class EditProfilePage extends StatefulWidget {
   const EditProfilePage({super.key});
@@ -11,28 +14,128 @@ class EditProfilePage extends StatefulWidget {
 
 class _EditProfilePageState extends State<EditProfilePage> {
   bool _newsletterEnabled = false;
+  bool _isLoading = true;
+  bool _isSaving = false;
 
   // Controllers to manage the text in the TextFields
   late TextEditingController _nameController;
   late TextEditingController _emailController;
+  late TextEditingController _phoneController;
+
+  final _supabaseService = SupabaseService();
+  UserProfile? _userProfile;
+  File? _selectedImage;
+  String? _currentAvatarUrl;
 
   @override
   void initState() {
     super.initState();
-    // Initialize controllers with the current user's data
-    _nameController = TextEditingController(text: currentUser.name);
-    _emailController = TextEditingController(text: currentUser.email);
+    // Initialize controllers
+    _nameController = TextEditingController();
+    _emailController = TextEditingController();
+    _phoneController = TextEditingController();
+    _loadUserProfile();
+  }
+
+  Future<void> _loadUserProfile() async {
+    final user = _supabaseService.currentUser;
+    if (user != null) {
+      final profileData = await _supabaseService.getUserProfile(user.id);
+      if (profileData != null && mounted) {
+        setState(() {
+          _userProfile = UserProfile.fromJson(profileData);
+          _nameController.text = _userProfile!.name;
+          _emailController.text = _userProfile!.email;
+          _phoneController.text = _userProfile!.phoneNumber ?? '';
+          _currentAvatarUrl = _userProfile!.avatarUrl;
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _pickImage() async {
+    final ImagePicker picker = ImagePicker();
+    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+    
+    if (image != null) {
+      setState(() {
+        _selectedImage = File(image.path);
+      });
+    }
+  }
+
+  Future<void> _saveProfile() async {
+    if (_userProfile == null) return;
+
+    setState(() { _isSaving = true; });
+
+    String? newAvatarUrl;
+    
+    // Upload new image if selected
+    if (_selectedImage != null) {
+      newAvatarUrl = await _supabaseService.uploadProfileImage(
+        _userProfile!.id,
+        _selectedImage!,
+      );
+    }
+
+    // Update profile
+    final error = await _supabaseService.updateUserProfile(
+      userId: _userProfile!.id,
+      name: _nameController.text.trim(),
+      phoneNumber: _phoneController.text.trim().isNotEmpty 
+          ? _phoneController.text.trim() 
+          : null,
+      avatarUrl: newAvatarUrl,
+    );
+
+    if (mounted) {
+      setState(() { _isSaving = false; });
+
+      if (error == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: Colors.green,
+            content: Text('Profile updated successfully!'),
+          ),
+        );
+        Navigator.of(context).pop(true); // Return true to indicate success
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: Colors.red,
+            content: Text('Error: $error'),
+          ),
+        );
+      }
+    }
   }
 
   @override
   void dispose() {
     _nameController.dispose();
     _emailController.dispose();
+    _phoneController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Scaffold(
+        backgroundColor: Colors.white,
+        appBar: AppBar(
+          elevation: 0,
+          backgroundColor: Colors.white,
+          foregroundColor: const Color(0xFF1D3557),
+          centerTitle: true,
+          title: Text('Edit Profile', style: GoogleFonts.splineSans(fontWeight: FontWeight.bold)),
+        ),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -56,7 +159,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                   const SizedBox(height: 16),
                   _buildTextField(label: 'Email', controller: _emailController),
                   const SizedBox(height: 16),
-                  _buildTextField(label: 'Phone Number', placeholder: 'Enter your phone number'),
+                  _buildTextField(label: 'Phone Number', placeholder: 'Enter your phone number', controller: _phoneController),
                   const SizedBox(height: 24),
                   _buildChangePasswordButton(),
                   const SizedBox(height: 32),
@@ -72,6 +175,16 @@ class _EditProfilePageState extends State<EditProfilePage> {
   }
 
   Widget _buildProfilePhotoSection() {
+    ImageProvider imageProvider;
+    
+    if (_selectedImage != null) {
+      imageProvider = FileImage(_selectedImage!);
+    } else if (_currentAvatarUrl != null) {
+      imageProvider = NetworkImage(_currentAvatarUrl!);
+    } else {
+      imageProvider = const NetworkImage('https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200');
+    }
+
     return Center(
       child: Column(
         children: [
@@ -79,7 +192,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
             children: [
               CircleAvatar(
                 radius: 64,
-                backgroundImage: NetworkImage(currentUser.avatarUrl),
+                backgroundImage: imageProvider,
               ),
               Positioned.fill(
                 child: Container(
@@ -89,7 +202,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                   ),
                   child: IconButton(
                     icon: const Icon(Icons.edit, color: Colors.white, size: 32),
-                    onPressed: () {},
+                    onPressed: _pickImage,
                   ),
                 ),
               ),
@@ -97,7 +210,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
           ),
           const SizedBox(height: 8),
           TextButton(
-            onPressed: () {},
+            onPressed: _pickImage,
             child: const Text('Change Profile Photo', style: TextStyle(color: Color(0xFF3A86FF))),
           ),
         ],
@@ -182,7 +295,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
         children: [
           Expanded(
             child: OutlinedButton(
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: _isSaving ? null : () => Navigator.of(context).pop(),
               style: OutlinedButton.styleFrom(
                 foregroundColor: const Color(0xFF1D3557),
                 side: BorderSide(color: Colors.grey.shade300),
@@ -196,7 +309,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
           const SizedBox(width: 16),
           Expanded(
             child: ElevatedButton(
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: _isSaving ? null : _saveProfile,
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF3A86FF),
                 foregroundColor: Colors.white,
@@ -204,7 +317,13 @@ class _EditProfilePageState extends State<EditProfilePage> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
                 textStyle: GoogleFonts.splineSans(fontWeight: FontWeight.bold, fontSize: 16),
               ),
-              child: const Text('Save Changes'),
+              child: _isSaving 
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                    )
+                  : const Text('Save Changes'),
             ),
           ),
         ],

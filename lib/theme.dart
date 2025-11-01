@@ -95,8 +95,8 @@ final ThemeData appTheme = ThemeData(
     indicatorColor: hirayaGold, // Tab indicator is gold
     labelColor: hirayaBlue,
     unselectedLabelColor: Colors.grey,
-    labelStyle: TextStyle(fontWeight: FontWeight.bold),
-    unselectedLabelStyle: TextStyle(fontWeight: FontWeight.normal),
+    labelStyle: const TextStyle(fontWeight: FontWeight.bold),
+    unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal),
   ),
 
   progressIndicatorTheme: const ProgressIndicatorThemeData(

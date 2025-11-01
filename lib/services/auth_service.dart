@@ -1,39 +1,38 @@
 // lib/services/auth_service.dart
 
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:mobiledev_ecowaste/services/supabase_service.dart';
 
 class AuthService {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final _supabaseService = SupabaseService();
 
-  // Stream to notify the app about authentication changes (login/logout)
-  Stream<User?> get authStateChanges => _auth.authStateChanges();
-
-  // Get the current user if they are logged in
-  User? get currentUser => _auth.currentUser;
-
-  // Sign in with Email & Password (We will use this later)
-  Future<String?> signInWithEmailAndPassword(String email, String password) async {
-    try {
-      await _auth.signInWithEmailAndPassword(email: email, password: password);
-      return null; // Sign-in successful
-    } on FirebaseAuthException catch (e) {
-      return e.message; // Return error message
-    }
+  // SIGN UP - Returns a String? with an error message, or null on success.
+  Future<String?> createNewUser(String email, String password, {String? name}) async {
+    return await _supabaseService.signUp(
+      email: email,
+      password: password,
+      name: name ?? 'User',
+    );
   }
 
-  // Register with Email & Password
-  Future<String?> createUserWithEmailAndPassword(String email, String password) async {
-    try {
-      await _auth.createUserWithEmailAndPassword(email: email, password: password);
-      return null; // Registration successful
-    } on FirebaseAuthException catch (e) {
-      // Return a user-friendly error message from Firebase
-      return e.message;
-    }
+  // SIGN IN - Returns a String? with an error message, or null on success.
+  Future<String?> logInUser(String email, String password) async {
+    return await _supabaseService.signIn(
+      email: email,
+      password: password,
+    );
   }
 
-  // Sign out
+  // SIGN OUT
   Future<void> signOut() async {
-    await _auth.signOut();
+    await _supabaseService.signOut();
   }
+
+  // AUTH STATE STREAM (This is what your AuthWrapper or equivalent will use)
+  Stream<User?> get user {
+    return _supabaseService.authStateChanges.map((state) => state.session?.user);
+  }
+
+  // Get current user
+  User? get currentUser => _supabaseService.currentUser;
 }
