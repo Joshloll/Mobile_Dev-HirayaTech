@@ -8,6 +8,8 @@ import 'package:mobiledev_ecowaste/widgets/app_drawer.dart';
 import 'chats_list_page.dart';
 import 'simple_listing/listing_type_selection_page.dart';
 import 'simple_listing/listings_feed_page.dart';
+import 'all_devices_page.dart';
+import 'device_details_page.dart';
 
 class MarketplacePage extends StatefulWidget {
   const MarketplacePage({super.key});

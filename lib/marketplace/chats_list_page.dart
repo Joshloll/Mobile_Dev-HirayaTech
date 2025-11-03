@@ -47,6 +47,33 @@ class _ChatsListPageState extends State<ChatsListPage> {
         foregroundColor: const Color(0xFF1D3557),
         centerTitle: true,
         title: Text('Chats', style: GoogleFonts.splineSans(fontWeight: FontWeight.bold)),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.search),
+            onPressed: () async {
+              await showSearch(
+                context: context,
+                delegate: _UserSearchDelegate(_supabaseService, onSelect: (user) async {
+                  final conversationId = await _supabaseService.getOrCreateConversation(user['id'] as String);
+                  if (!mounted) return;
+                  if (conversationId != null) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ChatPage(
+                          conversationId: conversationId,
+                          otherUserId: user['id'] as String,
+                          otherUserName: (user['name'] as String?) ?? 'User',
+                        ),
+                      ),
+                    );
+                  }
+                }),
+              );
+              _loadConversations();
+            },
+          )
+        ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -84,9 +111,9 @@ class _ChatsListPageState extends State<ChatsListPage> {
           context,
           MaterialPageRoute(
             builder: (context) => ChatPage(
-              conversationId: conversation['id'] as String,
-              otherUserId: otherUserId as String,
-              otherUserName: otherUserName as String? ?? 'Unknown User',
+              conversationId: (conversation['id']).toString(),
+              otherUserId: otherUserId.toString(),
+              otherUserName: (otherUserName is String) ? otherUserName : 'Unknown User',
             ),
           ),
         );
@@ -103,7 +130,7 @@ class _ChatsListPageState extends State<ChatsListPage> {
         children: [
           Expanded(
             child: Text(
-              otherUserName as String? ?? 'Unknown User',
+              (otherUserName is String) ? otherUserName : 'Unknown User',
               style: const TextStyle(fontWeight: FontWeight.bold),
               overflow: TextOverflow.ellipsis,
             ),
@@ -165,5 +192,79 @@ class _ChatsListPageState extends State<ChatsListPage> {
     } else {
       return DateFormat('MMM d').format(dateTime);
     }
+  }
+}
+
+class _UserSearchDelegate extends SearchDelegate {
+  final SupabaseService _supabaseService;
+  final void Function(Map<String, dynamic> user) onSelect;
+
+  _UserSearchDelegate(this._supabaseService, {required this.onSelect});
+
+  @override
+  List<Widget>? buildActions(BuildContext context) {
+    return [
+      if (query.isNotEmpty)
+        IconButton(
+          icon: const Icon(Icons.clear),
+          onPressed: () => query = '',
+        )
+    ];
+  }
+
+  @override
+  Widget? buildLeading(BuildContext context) {
+    return IconButton(
+      icon: const Icon(Icons.arrow_back),
+      onPressed: () => close(context, null),
+    );
+  }
+
+  @override
+  Widget buildResults(BuildContext context) {
+    return _buildResults();
+  }
+
+  @override
+  Widget buildSuggestions(BuildContext context) {
+    if (query.trim().isEmpty) {
+      return const Center(child: Text('Search users by name'));
+    }
+    return _buildResults();
+  }
+
+  Widget _buildResults() {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _supabaseService.searchUsers(query.trim()),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final results = snapshot.data!;
+        if (results.isEmpty) {
+          return const Center(child: Text('No users found'));
+        }
+        return ListView.builder(
+          itemCount: results.length,
+          itemBuilder: (context, index) {
+            final user = results[index];
+            return ListTile(
+              leading: CircleAvatar(
+                backgroundImage: (user['avatar_url'] as String?) != null
+                    ? NetworkImage(user['avatar_url'] as String)
+                    : null,
+                child: (user['avatar_url'] as String?) == null ? const Icon(Icons.person) : null,
+              ),
+              title: Text((user['name'] as String?) ?? 'User'),
+              subtitle: Text((user['email'] as String?) ?? ''),
+              onTap: () {
+                onSelect(user);
+                close(context, null);
+              },
+            );
+          },
+        );
+      },
+    );
   }
 }

@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:timelines/timelines.dart';
-import 'package:mobiledev_ecowaste/theme.dart';
 
 class DonationJourneyPage extends StatelessWidget {
   final Map<String, String> item;

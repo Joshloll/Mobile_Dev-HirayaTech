@@ -8,10 +8,15 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Initialize Supabase
-  await Supabase.initialize(
-    url: 'https://kdbctvolqjmhboikhutx.supabase.co',
-    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtkYmN0dm9scWptaGJvaWtodXR4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIwMDg0NjcsImV4cCI6MjA3NzU4NDQ2N30.ATovG2lM9ArDQAOfcxPbxmzbpAuzHsg7DzK8UG7gHY4',
-  );
+  const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
+  const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
+
+  if (supabaseUrl.isEmpty || supabaseAnonKey.isEmpty) {
+    runApp(const _ConfigErrorApp());
+    return;
+  }
+
+  await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
 
   runApp(const MyApp());
 }
@@ -26,6 +31,28 @@ class MyApp extends StatelessWidget {
       title: 'EcoWaste',
       theme: appTheme, // UPDATE: Using the appTheme variable from your theme.dart file
       home: const AuthWrapper(), // The AuthWrapper will handle what screen to show
+    );
+  }
+}
+
+class _ConfigErrorApp extends StatelessWidget {
+  const _ConfigErrorApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: Scaffold(
+        appBar: AppBar(title: const Text('Configuration Required')),
+        body: const Padding(
+          padding: EdgeInsets.all(16.0),
+          child: SelectableText(
+            'Missing Supabase configuration.\n\n'
+            'Please run the app with:\n'
+            'flutter run --dart-define=SUPABASE_URL=YOUR_URL --dart-define=SUPABASE_ANON_KEY=YOUR_ANON_KEY',
+          ),
+        ),
+      ),
     );
   }
 }

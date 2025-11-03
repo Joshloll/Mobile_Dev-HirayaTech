@@ -1,6 +1,8 @@
 // lib/marketplace/simple_listing/create_listing_page.dart
 
 import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
@@ -24,6 +26,8 @@ class _CreateListingPageState extends State<CreateListingPage> {
   
   final _supabaseService = SupabaseService();
   final List<File> _selectedImages = [];
+  final List<Uint8List> _selectedImageBytes = []; // for web
+  final List<String> _selectedImageExts = []; // for web mime/ext
   bool _isSubmitting = false;
 
   @override
@@ -40,9 +44,25 @@ class _CreateListingPageState extends State<CreateListingPage> {
     final List<XFile> images = await picker.pickMultiImage(imageQuality: 70);
     
     if (images.isNotEmpty) {
-      setState(() {
-        _selectedImages.addAll(images.map((xFile) => File(xFile.path)));
-      });
+      if (kIsWeb) {
+        final bytesList = <Uint8List>[];
+        final exts = <String>[];
+        for (final x in images) {
+          final b = await x.readAsBytes();
+          bytesList.add(b);
+          final name = x.name;
+          final ext = name.contains('.') ? name.split('.').last : 'jpg';
+          exts.add(ext);
+        }
+        setState(() {
+          _selectedImageBytes.addAll(bytesList);
+          _selectedImageExts.addAll(exts);
+        });
+      } else {
+        setState(() {
+          _selectedImages.addAll(images.map((xFile) => File(xFile.path)));
+        });
+      }
     }
   }
 
@@ -51,22 +71,35 @@ class _CreateListingPageState extends State<CreateListingPage> {
     final XFile? image = await picker.pickImage(source: ImageSource.camera, imageQuality: 70);
     
     if (image != null) {
-      setState(() {
-        _selectedImages.add(File(image.path));
-      });
+      if (kIsWeb) {
+        final bytes = await image.readAsBytes();
+        final name = image.name;
+        final ext = name.contains('.') ? name.split('.').last : 'jpg';
+        setState(() {
+          _selectedImageBytes.add(bytes);
+          _selectedImageExts.add(ext);
+        });
+      } else {
+        setState(() { _selectedImages.add(File(image.path)); });
+      }
     }
   }
 
   void _removeImage(int index) {
     setState(() {
-      _selectedImages.removeAt(index);
+      if (kIsWeb) {
+        _selectedImageBytes.removeAt(index);
+        _selectedImageExts.removeAt(index);
+      } else {
+        _selectedImages.removeAt(index);
+      }
     });
   }
 
   Future<void> _submitListing() async {
     if (!_formKey.currentState!.validate()) return;
 
-    if (_selectedImages.isEmpty) {
+    if ((!kIsWeb && _selectedImages.isEmpty) || (kIsWeb && _selectedImageBytes.isEmpty)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           backgroundColor: Colors.red,
@@ -81,10 +114,17 @@ class _CreateListingPageState extends State<CreateListingPage> {
     try {
       // Upload images
       final List<String> imageUrls = [];
-      for (final image in _selectedImages) {
-        final url = await _supabaseService.uploadListingImage(image);
-        if (url != null) {
-          imageUrls.add(url);
+      if (kIsWeb) {
+        for (var i = 0; i < _selectedImageBytes.length; i++) {
+          final bytes = _selectedImageBytes[i];
+          final ext = _selectedImageExts[i];
+          final url = await _supabaseService.uploadListingImageBytes(bytes, fileExt: ext);
+          if (url != null) imageUrls.add(url);
+        }
+      } else {
+        for (final image in _selectedImages) {
+          final url = await _supabaseService.uploadListingImage(image);
+          if (url != null) imageUrls.add(url);
         }
       }
 
@@ -360,10 +400,9 @@ class _CreateListingPageState extends State<CreateListingPage> {
           children: [
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: Image.file(
-                _selectedImages[index],
-                fit: BoxFit.cover,
-              ),
+              child: kIsWeb
+                  ? Image.memory(_selectedImageBytes[index], fit: BoxFit.cover)
+                  : Image.file(_selectedImages[index], fit: BoxFit.cover),
             ),
             Positioned(
               top: 4,

@@ -1,6 +1,8 @@
 // lib/services/supabase_service.dart
 
 import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SupabaseService {
@@ -145,6 +147,27 @@ class SupabaseService {
     }
   }
 
+  // UPLOAD PROFILE IMAGE (WEB BYTES)
+  Future<String?> uploadProfileImageBytes(String userId, Uint8List bytes, {String? fileExt}) async {
+    try {
+      final ext = fileExt ?? 'jpg';
+      final fileName = '$userId-${DateTime.now().millisecondsSinceEpoch}.$ext';
+      final filePath = 'profile_images/$fileName';
+
+      await client.storage.from('avatars').uploadBinary(
+        filePath,
+        bytes,
+        fileOptions: const FileOptions(upsert: true),
+      );
+
+      final publicUrl = client.storage.from('avatars').getPublicUrl(filePath);
+      return publicUrl;
+    } catch (e) {
+      print('Error uploading image (web): $e');
+      return null;
+    }
+  }
+
   // STREAM USER PROFILE (real-time updates)
   Stream<Map<String, dynamic>?> streamUserProfile(String userId) {
     return client
@@ -220,6 +243,29 @@ class SupabaseService {
     }
   }
 
+  Future<String?> uploadListingImageBytes(Uint8List bytes, {String? fileExt}) async {
+    try {
+      final user = currentUser;
+      if (user == null) return null;
+
+      final ext = fileExt ?? 'jpg';
+      final fileName = '${user.id}-${DateTime.now().millisecondsSinceEpoch}.$ext';
+      final filePath = 'listings/$fileName';
+
+      await client.storage.from('listing_images').uploadBinary(
+        filePath,
+        bytes,
+        fileOptions: const FileOptions(upsert: true),
+      );
+
+      final publicUrl = client.storage.from('listing_images').getPublicUrl(filePath);
+      return publicUrl;
+    } catch (e) {
+      print('Error uploading listing image (web): $e');
+      return null;
+    }
+  }
+
   // GET ALL LISTINGS
   Future<List<Map<String, dynamic>>> getAllListings() async {
     try {
@@ -274,6 +320,25 @@ class SupabaseService {
         .eq('status', 'active')
         .order('created_at', ascending: false)
         .map((data) => List<Map<String, dynamic>>.from(data));
+  }
+
+  // ============================================
+  // USER SEARCH
+  // ============================================
+
+  Future<List<Map<String, dynamic>>> searchUsers(String query) async {
+    try {
+      final user = currentUser;
+      final response = await client
+          .from('profiles')
+          .select('id,name,avatar_url,email')
+          .ilike('name', '%$query%')
+          .neq('id', user?.id ?? '');
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      print('Error searching users: $e');
+      return [];
+    }
   }
 
   // ============================================
@@ -339,6 +404,7 @@ class SupabaseService {
     required String conversationId,
     required String content,
     String? imageUrl,
+    String? recipientUserId, // optional for notifications
   }) async {
     try {
       final user = currentUser;
@@ -351,6 +417,16 @@ class SupabaseService {
         'image_url': imageUrl,
         'created_at': DateTime.now().toIso8601String(),
       });
+
+      if (recipientUserId != null) {
+        // Lightweight notification
+        await client.from('notifications').insert({
+          'user_id': recipientUserId,
+          'title': 'New message',
+          'body': content,
+          'created_at': DateTime.now().toIso8601String(),
+        });
+      }
 
       return null; // Success
     } catch (e) {
@@ -433,6 +509,153 @@ class SupabaseService {
     } catch (e) {
       print('Error uploading post image: $e');
       return null;
+    }
+  }
+
+  Future<String?> uploadPostImageBytes(Uint8List bytes, {String? fileExt}) async {
+    try {
+      final user = currentUser;
+      if (user == null) return null;
+
+      final ext = fileExt ?? 'jpg';
+      final fileName = '${user.id}-${DateTime.now().millisecondsSinceEpoch}.$ext';
+      final filePath = 'posts/$fileName';
+
+      await client.storage.from('community_posts').uploadBinary(
+        filePath,
+        bytes,
+        fileOptions: const FileOptions(upsert: true),
+      );
+
+      final publicUrl = client.storage.from('community_posts').getPublicUrl(filePath);
+      return publicUrl;
+    } catch (e) {
+      print('Error uploading post image (web): $e');
+      return null;
+    }
+  }
+
+  // ============================================
+  // IMPACT / LEADERBOARD
+  // ============================================
+
+  Future<int> getCurrentUserPoints() async {
+    try {
+      final user = currentUser;
+      if (user == null) return 0;
+      final res = await client
+          .from('user_points')
+          .select('points')
+          .eq('user_id', user.id)
+          .maybeSingle();
+      if (res == null) return 0;
+      return (res['points'] as int? ?? 0);
+    } catch (e) {
+      print('Error fetching user points: $e');
+      return 0;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getLeaderboard({int limit = 10}) async {
+    try {
+      final response = await client
+          .from('user_points_with_profiles')
+          .select()
+          .order('points', ascending: false)
+          .limit(limit);
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      print('Error fetching leaderboard: $e');
+      return [];
+    }
+  }
+
+  // ============================================
+  // TRANSACTIONS FLOWS
+  // ============================================
+
+  Future<String?> requestBuy(String listingId) async {
+    try {
+      final res = await client.rpc('request_buy', params: { 'p_listing_id': listingId });
+      return res?.toString();
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
+  Future<String?> confirmSale(String transactionId) async {
+    try {
+      await client.rpc('confirm_sale', params: { 'p_tx_id': transactionId });
+      return null;
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
+  Future<String?> proposeTrade({required String listingId, required String partnerListingId}) async {
+    try {
+      final res = await client.rpc('propose_trade', params: { 'p_listing_id': listingId, 'p_partner_listing_id': partnerListingId });
+      return res?.toString();
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
+  Future<String?> confirmTrade(String transactionId) async {
+    try {
+      await client.rpc('confirm_trade', params: { 'p_tx_id': transactionId });
+      return null;
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
+  Future<String?> requestDonation(String listingId) async {
+    try {
+      final res = await client.rpc('request_donation', params: { 'p_listing_id': listingId });
+      return res?.toString();
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
+  Future<String?> confirmDonation(String transactionId) async {
+    try {
+      await client.rpc('confirm_donation', params: { 'p_tx_id': transactionId });
+      return null;
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getUserTransactionsDetailed(String userId) async {
+    try {
+      final res = await client
+          .from('market_transactions')
+          .select('*, listings(*), buyer_id, seller_id')
+          .or('seller_id.eq.$userId,buyer_id.eq.$userId')
+          .order('created_at', ascending: false);
+      return List<Map<String, dynamic>>.from(res);
+    } catch (e) {
+      print('Error fetching transactions: $e');
+      return [];
+    }
+  }
+
+  // Notifications
+  Future<List<Map<String, dynamic>>> getNotifications() async {
+    try {
+      final user = currentUser;
+      if (user == null) return [];
+      final res = await client
+          .from('notifications')
+          .select()
+          .eq('user_id', user.id)
+          .order('created_at', ascending: false);
+      return List<Map<String, dynamic>>.from(res);
+    } catch (e) {
+      print('Error fetching notifications: $e');
+      return [];
     }
   }
 
@@ -579,6 +802,22 @@ class SupabaseService {
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
       print('Error fetching user transactions: $e');
+      return [];
+    }
+  }
+
+  // GET USER DONATIONS (listings created as donations)
+  Future<List<Map<String, dynamic>>> getUserDonations(String userId) async {
+    try {
+      final response = await client
+          .from('listings')
+          .select()
+          .eq('user_id', userId)
+          .eq('listing_type', 'donate')
+          .order('created_at', ascending: false);
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      print('Error fetching user donations: $e');
       return [];
     }
   }

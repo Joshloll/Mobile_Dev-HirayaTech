@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:mobiledev_ecowaste/models/user_model.dart';
@@ -25,6 +27,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
   final _supabaseService = SupabaseService();
   UserProfile? _userProfile;
   File? _selectedImage;
+  Uint8List? _selectedImageBytes; // for web
   String? _currentAvatarUrl;
 
   @override
@@ -41,7 +44,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
     final user = _supabaseService.currentUser;
     if (user != null) {
       final profileData = await _supabaseService.getUserProfile(user.id);
-      if (profileData != null && mounted) {
+      if (!mounted) return;
+      if (profileData != null) {
         setState(() {
           _userProfile = UserProfile.fromJson(profileData);
           _nameController.text = _userProfile!.name;
@@ -50,6 +54,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
           _currentAvatarUrl = _userProfile!.avatarUrl;
           _isLoading = false;
         });
+      } else {
+        setState(() { _isLoading = false; });
       }
     }
   }
@@ -59,9 +65,12 @@ class _EditProfilePageState extends State<EditProfilePage> {
     final XFile? image = await picker.pickImage(source: ImageSource.gallery);
     
     if (image != null) {
-      setState(() {
-        _selectedImage = File(image.path);
-      });
+      if (kIsWeb) {
+        final bytes = await image.readAsBytes();
+        setState(() { _selectedImageBytes = bytes; });
+      } else {
+        setState(() { _selectedImage = File(image.path); });
+      }
     }
   }
 
@@ -73,7 +82,12 @@ class _EditProfilePageState extends State<EditProfilePage> {
     String? newAvatarUrl;
     
     // Upload new image if selected
-    if (_selectedImage != null) {
+    if (kIsWeb && _selectedImageBytes != null) {
+      newAvatarUrl = await _supabaseService.uploadProfileImageBytes(
+        _userProfile!.id,
+        _selectedImageBytes!,
+      );
+    } else if (_selectedImage != null) {
       newAvatarUrl = await _supabaseService.uploadProfileImage(
         _userProfile!.id,
         _selectedImage!,
@@ -176,8 +190,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
   Widget _buildProfilePhotoSection() {
     ImageProvider imageProvider;
-    
-    if (_selectedImage != null) {
+    if (kIsWeb && _selectedImageBytes != null) {
+      imageProvider = MemoryImage(_selectedImageBytes!);
+    } else if (_selectedImage != null) {
       imageProvider = FileImage(_selectedImage!);
     } else if (_currentAvatarUrl != null) {
       imageProvider = NetworkImage(_currentAvatarUrl!);

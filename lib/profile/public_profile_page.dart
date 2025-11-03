@@ -19,6 +19,8 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
   final _supabaseService = SupabaseService();
   Map<String, dynamic>? _userProfile;
   List<Map<String, dynamic>> _transactions = [];
+  List<Map<String, dynamic>> _pendingTransactions = [];
+  int _points = 0;
   bool _isLoading = true;
 
   @override
@@ -31,12 +33,16 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
     setState(() { _isLoading = true; });
 
     final profile = await _supabaseService.getUserProfile(widget.userId);
-    final transactions = await _supabaseService.getUserTransactions(widget.userId);
+    final transactions = await _supabaseService.getUserTransactionsDetailed(widget.userId);
+    final pending = transactions.where((t) => (t['status'] as String?) == 'pending').toList();
+    final points = await _supabaseService.getCurrentUserPoints();
 
     if (mounted) {
       setState(() {
         _userProfile = profile;
         _transactions = transactions;
+        _pendingTransactions = pending;
+        _points = points;
         _isLoading = false;
       });
     }
@@ -134,7 +140,53 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
 
             const Divider(thickness: 8, color: Color(0xFFF5F5F5)),
 
-            // Transactions section
+            // Points summary
+            Container(
+              padding: const EdgeInsets.all(16),
+              alignment: Alignment.centerLeft,
+              child: Row(
+                children: [
+                  const Icon(Icons.stars, color: Color(0xFF3A86FF)),
+                  const SizedBox(width: 8),
+                  Text('Impact Points: $_points', style: GoogleFonts.splineSans(fontSize: 18, fontWeight: FontWeight.bold)),
+                ],
+              ),
+            ),
+
+            const Divider(thickness: 8, color: Color(0xFFF5F5F5)),
+
+            // Pending transactions
+            Container(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Pending Transactions (${_pendingTransactions.length})',
+                    style: GoogleFonts.splineSans(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  if (_pendingTransactions.isEmpty)
+                    Text('No pending transactions', style: TextStyle(color: Colors.grey[600]))
+                  else
+                    ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: _pendingTransactions.length,
+                      itemBuilder: (context, index) {
+                        return _buildTransactionCard(_pendingTransactions[index]);
+                      },
+                    ),
+                ],
+              ),
+            ),
+
+            const Divider(thickness: 8, color: Color(0xFFF5F5F5)),
+
+            // Completed transactions section
             Container(
               padding: const EdgeInsets.all(16),
               child: Column(

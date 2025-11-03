@@ -3,45 +3,107 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:mobiledev_ecowaste/marketplace/add_listing/add_listing_step1_page.dart';
 import 'package:mobiledev_ecowaste/marketplace/add_listing/listing_form_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:mobiledev_ecowaste/services/supabase_service.dart';
 import 'donation_journey_page.dart';
 
-class DonatePage extends StatelessWidget {
+class DonatePage extends StatefulWidget {
   const DonatePage({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final List<Map<String, String>> donatedItems = [
-      {'name': 'iPhone 12 Pro', 'date': '15 May 2024', 'status': 'Redistributed'},
-      {'name': 'MacBook Air M1', 'date': '22 Apr 2024', 'status': 'Awaiting'},
-      {'name': 'Sony WH-1000XM4', 'date': '01 Mar 2024', 'status': 'Redistributed'},
-    ];
+  State<DonatePage> createState() => _DonatePageState();
+}
 
+class _DonatePageState extends State<DonatePage> {
+  final _supabaseService = SupabaseService();
+  bool _isLoading = true;
+  List<Map<String, String>> _donatedItems = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDonations();
+  }
+
+  Future<void> _loadDonations() async {
+    setState(() { _isLoading = true; });
+    final userId = _supabaseService.currentUser?.id;
+    if (userId == null) {
+      if (mounted) setState(() { _isLoading = false; _donatedItems = []; });
+      return;
+    }
+
+    final donations = await _supabaseService.getUserDonations(userId);
+
+    final mapped = donations.map<Map<String, String>>((d) {
+      final createdAtIso = d['created_at'] as String?;
+      final createdAt = createdAtIso != null ? DateTime.tryParse(createdAtIso) : null;
+      final formatted = createdAt != null
+          ? '${createdAt.day.toString().padLeft(2, '0')} ${_month(createdAt.month)} ${createdAt.year}'
+          : '';
+      final statusRaw = (d['status'] as String?) ?? 'active';
+      // Map backend status to user-friendly status labels
+      final status = statusRaw == 'completed' ? 'Redistributed' : 'Awaiting';
+      return {
+        'name': (d['title'] as String?) ?? 'Donation',
+        'date': formatted,
+        'status': status,
+      };
+    }).toList();
+
+    if (mounted) {
+      setState(() { _donatedItems = mapped; _isLoading = false; });
+    }
+  }
+
+  String _month(int m) {
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return months[(m - 1).clamp(0, 11)];
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: ListView(
-        padding: const EdgeInsets.all(16.0),
-        children: [
-          Text(
-            'Previously Donated Items',
-            style: GoogleFonts.splineSans(
-              color: Theme.of(context).colorScheme.primary,
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
+      body: RefreshIndicator(
+        onRefresh: _loadDonations,
+        child: ListView(
+          padding: const EdgeInsets.all(16.0),
+          children: [
+            Text(
+              'Previously Donated Items',
+              style: GoogleFonts.splineSans(
+                color: Theme.of(context).colorScheme.primary,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
             ),
-          ),
-          const SizedBox(height: 16),
-          ...donatedItems.map((item) {
-            return GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => DonationJourneyPage(item: item)),
+            const SizedBox(height: 16),
+            if (_isLoading)
+              const Center(child: Padding(
+                padding: EdgeInsets.all(24.0),
+                child: CircularProgressIndicator(),
+              ))
+            else if (_donatedItems.isEmpty)
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24.0),
+                  child: Text('No donations yet', style: TextStyle(color: Colors.grey[600])),
+                ),
+              )
+            else
+              ..._donatedItems.map((item) {
+                return GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => DonationJourneyPage(item: item)),
+                    );
+                  },
+                  child: _buildDonationCard(item),
                 );
-              },
-              child: _buildDonationCard(item),
-            );
-          }).toList(),
-        ],
+              }).toList(),
+          ],
+        ),
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
@@ -53,11 +115,10 @@ class DonatePage extends StatelessWidget {
                 child: const AddListingStep1Page(),
               ),
             ),
-          );
+          ).then((_) => _loadDonations());
         },
         label: const Text('Donate a New Device'),
         icon: const Icon(Icons.add),
-        // --- FIX: Removed hardcoded colors to use the global theme ---
       ),
     );
   }

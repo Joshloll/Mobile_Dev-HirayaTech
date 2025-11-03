@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:mobiledev_ecowaste/theme.dart';
 import 'device_details_page.dart';
 
 class AllDevicesPage extends StatelessWidget {

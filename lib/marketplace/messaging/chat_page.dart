@@ -70,6 +70,7 @@ class _ChatPageState extends State<ChatPage> {
     final error = await _supabaseService.sendMessage(
       conversationId: widget.conversationId,
       content: content,
+      recipientUserId: widget.otherUserId,
     );
 
     if (mounted) {

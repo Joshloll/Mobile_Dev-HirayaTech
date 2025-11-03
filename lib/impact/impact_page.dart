@@ -1,25 +1,72 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:mobiledev_ecowaste/theme.dart'; // Import theme for colors
+import 'package:mobiledev_ecowaste/services/supabase_service.dart';
 
-class ImpactPage extends StatelessWidget {
+class ImpactPage extends StatefulWidget {
   const ImpactPage({super.key});
 
   @override
+  State<ImpactPage> createState() => _ImpactPageState();
+}
+
+class _ImpactPageState extends State<ImpactPage> {
+  final _supabaseService = SupabaseService();
+  int _points = 0;
+  int _devices = 0;
+  List<Map<String, dynamic>> _leaderboard = [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    setState(() { _loading = true; });
+    final points = await _supabaseService.getCurrentUserPoints();
+    final leaderboard = await _supabaseService.getLeaderboard(limit: 10);
+    // Try to fetch devices from user_points (devices field)
+    int devices = 0;
+    try {
+      final user = _supabaseService.currentUser;
+      if (user != null) {
+        final res = await _supabaseService.client
+            .from('user_points')
+            .select('devices')
+            .eq('user_id', user.id)
+            .maybeSingle();
+        if (res != null) {
+          devices = (res['devices'] as int? ?? 0);
+        }
+      }
+    } catch (_) {}
+
+    if (!mounted) return;
+    setState(() { _points = points; _devices = devices; _leaderboard = leaderboard; _loading = false; });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    // The main build method calls the helper methods below.
+    if (_loading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
     return Scaffold(
-      body: ListView(
-        children: [
-          const SizedBox(height: 16),
-          _buildStatsCards(),
-          _buildNextBadgeProgress(context),
-          _buildSectionHeader('Badges Earned', 'View All', () {}),
-          _buildBadgesGrid(),
-          _buildSectionHeader('Leaderboard', 'This Week', () {}),
-          _buildLeaderboardList(),
-          const SizedBox(height: 24),
-        ],
+      body: RefreshIndicator(
+        onRefresh: _loadData,
+        child: ListView(
+          children: [
+            const SizedBox(height: 16),
+            _buildStatsCards(),
+            _buildNextBadgeProgress(context),
+            _buildSectionHeader('Badges Earned', 'View All', () {}),
+            _buildBadgesGrid(),
+            _buildSectionHeader('Leaderboard', 'This Week', () {}),
+            _buildLeaderboardList(),
+            const SizedBox(height: 24),
+          ],
+        ),
       ),
     );
   }
@@ -33,7 +80,7 @@ class ImpactPage extends StatelessWidget {
         children: [
           Row(
             children: [
-              _buildStatCard('1,250', 'Points'),
+              _buildStatCard('$_points', 'Points'),
               const SizedBox(width: 12),
               _buildStatCard('3', 'Badges'),
             ],
@@ -41,7 +88,7 @@ class ImpactPage extends StatelessWidget {
           const SizedBox(height: 12),
           Row(
             children: [
-              _buildStatCard('15', 'Devices Saved'),
+              _buildStatCard('$_devices', 'Devices Saved'),
             ],
           ),
         ],
@@ -171,11 +218,17 @@ class ImpactPage extends StatelessWidget {
   }
 
   Widget _buildLeaderboardList() {
-    final leaderboard = [
-      { 'rank': '1', 'name': 'Ethan Carter', 'points': '1,500 points', 'avatar': 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100', 'isTop': true },
-      { 'rank': '2', 'name': 'Sophia Lee', 'points': '1,450 points', 'avatar': 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=100', 'isTop': false },
-      { 'rank': '3', 'name': 'Noah Williams', 'points': '1,300 points', 'avatar': 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100', 'isTop': false },
-    ];
+    final leaderboard = _leaderboard.asMap().entries.map((e) {
+      final i = e.key;
+      final row = e.value;
+      return {
+        'rank': (i + 1).toString(),
+        'name': (row['user_name'] as String?) ?? 'User',
+        'points': '${row['points'] ?? 0} points',
+        'avatar': (row['user_avatar_url'] as String?) ?? '',
+        'isTop': i == 0,
+      };
+    }).toList();
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
       child: Column(
@@ -195,7 +248,12 @@ class ImpactPage extends StatelessWidget {
                     style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: hirayaBlue),
                   ),
                   const SizedBox(width: 16),
-                  CircleAvatar(backgroundImage: NetworkImage(entry['avatar']! as String)),
+                  CircleAvatar(
+                    backgroundImage: (entry['avatar']! as String).isNotEmpty
+                        ? NetworkImage(entry['avatar']! as String)
+                        : null,
+                    child: (entry['avatar']! as String).isEmpty ? const Icon(Icons.person) : null,
+                  ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(

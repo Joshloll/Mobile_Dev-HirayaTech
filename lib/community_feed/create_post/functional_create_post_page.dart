@@ -1,6 +1,8 @@
 // lib/community_feed/create_post/functional_create_post_page.dart
 
 import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
@@ -16,7 +18,8 @@ class FunctionalCreatePostPage extends StatefulWidget {
 class _FunctionalCreatePostPageState extends State<FunctionalCreatePostPage> {
   final _contentController = TextEditingController();
   final _supabaseService = SupabaseService();
-  File? _selectedImage;
+  File? _selectedImage; // mobile/desktop
+  Uint8List? _selectedImageBytes; // web
   bool _isPosting = false;
 
   @override
@@ -33,9 +36,12 @@ class _FunctionalCreatePostPageState extends State<FunctionalCreatePostPage> {
     );
 
     if (image != null) {
-      setState(() {
-        _selectedImage = File(image.path);
-      });
+      if (kIsWeb) {
+        final bytes = await image.readAsBytes();
+        setState(() { _selectedImageBytes = bytes; });
+      } else {
+        setState(() { _selectedImage = File(image.path); });
+      }
     }
   }
 
@@ -47,15 +53,19 @@ class _FunctionalCreatePostPageState extends State<FunctionalCreatePostPage> {
     );
 
     if (image != null) {
-      setState(() {
-        _selectedImage = File(image.path);
-      });
+      if (kIsWeb) {
+        final bytes = await image.readAsBytes();
+        setState(() { _selectedImageBytes = bytes; });
+      } else {
+        setState(() { _selectedImage = File(image.path); });
+      }
     }
   }
 
   void _removeImage() {
     setState(() {
       _selectedImage = null;
+      _selectedImageBytes = null;
     });
   }
 
@@ -78,7 +88,9 @@ class _FunctionalCreatePostPageState extends State<FunctionalCreatePostPage> {
       String? imageUrl;
 
       // Upload image if selected
-      if (_selectedImage != null) {
+      if (kIsWeb && _selectedImageBytes != null) {
+        imageUrl = await _supabaseService.uploadPostImageBytes(_selectedImageBytes!);
+      } else if (_selectedImage != null) {
         imageUrl = await _supabaseService.uploadPostImage(_selectedImage!);
       }
 
@@ -159,16 +171,14 @@ class _FunctionalCreatePostPageState extends State<FunctionalCreatePostPage> {
             const SizedBox(height: 20),
 
             // Selected image preview
-            if (_selectedImage != null) ...[
+            if (_selectedImage != null || _selectedImageBytes != null) ...[
               Stack(
                 children: [
                   ClipRRect(
                     borderRadius: BorderRadius.circular(12),
-                    child: Image.file(
-                      _selectedImage!,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                    ),
+                    child: kIsWeb
+                        ? Image.memory(_selectedImageBytes!, width: double.infinity, fit: BoxFit.cover)
+                        : Image.file(_selectedImage!, width: double.infinity, fit: BoxFit.cover),
                   ),
                   Positioned(
                     top: 8,

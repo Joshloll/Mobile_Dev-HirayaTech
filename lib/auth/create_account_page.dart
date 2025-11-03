@@ -82,6 +82,8 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
           content: Text("Account created successfully! Please log in."),
         ),
       );
+      // Return to previous screen (login)
+      Navigator.of(context).pop();
     }
     // On success, your AuthWrapper handles navigation automatically.
   }

@@ -147,7 +147,7 @@ class ListingDetailsPage extends StatelessWidget {
             ),
           ),
 
-          // Bottom action button
+          // Bottom action button(s)
           if (!isOwnListing)
             Container(
               padding: const EdgeInsets.all(16),
@@ -162,16 +162,40 @@ class ListingDetailsPage extends StatelessWidget {
                 ],
               ),
               child: SafeArea(
-                child: ElevatedButton.icon(
-                  onPressed: () => _contactSeller(context, userId),
-                  icon: const Icon(Icons.message),
-                  label: const Text('Message Seller'),
-                  style: ElevatedButton.styleFrom(
-                    minimumSize: const Size(double.infinity, 50),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (listingType == 'sell') ...[
+                      ElevatedButton(
+                        onPressed: () => _requestBuy(context),
+                        style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
+                        child: const Text('Buy Now'),
+                      ),
+                      const SizedBox(height: 8),
+                    ]
+                    else if (listingType == 'trade') ...[
+                      ElevatedButton(
+                        onPressed: () => _proposeTrade(context),
+                        style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
+                        child: const Text('Propose Trade'),
+                      ),
+                      const SizedBox(height: 8),
+                    ]
+                    else if (listingType == 'donate') ...[
+                      ElevatedButton(
+                        onPressed: () => _requestDonation(context),
+                        style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
+                        child: const Text('Request Donation'),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                    OutlinedButton.icon(
+                      onPressed: () => _contactSeller(context, userId),
+                      icon: const Icon(Icons.message),
+                      label: const Text('Message Seller'),
+                      style: OutlinedButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
                     ),
-                  ),
+                  ],
                 ),
               ),
             ),
@@ -257,6 +281,37 @@ class ListingDetailsPage extends StatelessWidget {
           ),
         ),
       );
+    }
+  }
+
+  Future<void> _requestBuy(BuildContext context) async {
+    final service = SupabaseService();
+    final res = await service.requestBuy(listing['id'] as String);
+    if (context.mounted) {
+      if (res != null) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(backgroundColor: Colors.green, content: Text('Purchase requested. Waiting for seller confirmation.')));
+        Navigator.of(context).pop();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(backgroundColor: Colors.red, content: Text('Failed to request purchase')));
+      }
+    }
+  }
+
+  Future<void> _proposeTrade(BuildContext context) async {
+    // For simplicity, open a message to negotiate; selecting a partner listing UI can be implemented later
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Select one of your listings to trade (UI TBD)')));
+  }
+
+  Future<void> _requestDonation(BuildContext context) async {
+    final service = SupabaseService();
+    final res = await service.requestDonation(listing['id'] as String);
+    if (context.mounted) {
+      if (res != null) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(backgroundColor: Colors.green, content: Text('Donation requested. Waiting for donor confirmation.')));
+        Navigator.of(context).pop();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(backgroundColor: Colors.red, content: Text('Failed to request donation')));
+      }
     }
   }
 
