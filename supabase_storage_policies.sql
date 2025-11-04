@@ -28,3 +28,11 @@ create policy "users manage community images" on storage.objects for update usin
 );
 
 
+-- Messages bucket
+create policy "public read chat images" on storage.objects for select using ( bucket_id = 'messages' );
+create policy "users upload chat images" on storage.objects for insert with check (
+  bucket_id = 'messages' and owner = auth.uid()
+);
+create policy "users manage chat images" on storage.objects for update using (
+  bucket_id = 'messages' and owner = auth.uid()
+);

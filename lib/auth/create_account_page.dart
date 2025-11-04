@@ -12,6 +12,7 @@ class CreateAccountPage extends StatefulWidget {
 
 class _CreateAccountPageState extends State<CreateAccountPage> {
   final _emailController = TextEditingController();
+  final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   final _authService = AuthService();
@@ -21,6 +22,7 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
   @override
   void dispose() {
     _emailController.dispose();
+    _usernameController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
@@ -53,14 +55,15 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
 
     setState(() { _isLoading = true; });
 
-    // Extract name from email (before @) as default name
     final email = _emailController.text.trim();
-    final defaultName = email.split('@').first;
+    final username = _usernameController.text.trim().isNotEmpty
+        ? _usernameController.text.trim()
+        : email.split('@').first;
 
     final result = await _authService.createNewUser(
       email,
       _passwordController.text.trim(),
-      name: defaultName,
+      name: username,
     );
 
     if (mounted) {
@@ -79,10 +82,12 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           backgroundColor: Colors.green,
-          content: Text("Account created successfully! Please log in."),
+          duration: Duration(seconds: 5),
+          content: Text("Account successfully created, please log in now"),
         ),
       );
-      // Return to previous screen (login)
+      await Future.delayed(const Duration(seconds: 5));
+      if (!mounted) return;
       Navigator.of(context).pop();
     }
     // On success, your AuthWrapper handles navigation automatically.
@@ -101,6 +106,8 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
                 child: Image.asset('assets/images/logo_leaf.png', height: 120),
               ),
               const SizedBox(height: 32),
+              _buildTextField(label: 'Username', placeholder: 'Choose a username', controller: _usernameController),
+              const SizedBox(height: 24),
               _buildTextField(label: 'Email', placeholder: 'Enter your email', controller: _emailController),
               const SizedBox(height: 24),
               _buildPasswordField(controller: _passwordController),

@@ -149,8 +149,11 @@ class _AppDrawerState extends State<AppDrawer> {
           : Column(
               children: [
                 CircleAvatar(
-                  radius: 40,
-                  backgroundImage: NetworkImage(_userProfile?.avatarUrl ?? 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200'),
+                  radius: 44,
+                  backgroundImage: (_userProfile?.avatarUrl ?? '').isNotEmpty
+                      ? NetworkImage(_userProfile!.avatarUrl)
+                      : null,
+                  child: (_userProfile?.avatarUrl ?? '').isEmpty ? const Icon(Icons.person, color: Colors.white, size: 44) : null,
                 ),
                 const SizedBox(height: 12),
                 Text(
@@ -161,10 +164,25 @@ class _AppDrawerState extends State<AppDrawer> {
                     fontSize: 20,
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  _userProfile?.email ?? '',
-                  style: TextStyle(color: Colors.white.withOpacity(0.7)),
+                const SizedBox(height: 8),
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    Navigator.of(context).pop();
+                    final result = await Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const EditProfilePage()),
+                    );
+                    if (result == true) {
+                      _loadUserProfile();
+                    }
+                  },
+                  icon: const Icon(Icons.edit),
+                  label: const Text('Edit Profile'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: const Color(0xFF1D3557),
+                    minimumSize: const Size(160, 36),
+                  ),
                 ),
               ],
             ),

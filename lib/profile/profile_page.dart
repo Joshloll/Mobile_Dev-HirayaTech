@@ -4,6 +4,7 @@ import 'package:mobiledev_ecowaste/models/user_model.dart';
 import 'package:mobiledev_ecowaste/settings/settings_page.dart';
 import 'package:mobiledev_ecowaste/marketplace/device_details_page.dart';
 import 'package:mobiledev_ecowaste/services/supabase_service.dart';
+import 'package:mobiledev_ecowaste/marketplace/simple_listing/listing_details_page.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -190,6 +191,20 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
             leading: const Icon(Icons.notifications),
             title: Text(n['title'] as String),
             subtitle: Text((n['body'] as String?) ?? ''),
+            onTap: () async {
+              final listingId = n['listing_id'] as String?;
+              if (listingId == null) return;
+              final listing = await _supabaseService.getListingById(listingId);
+              if (!mounted) return;
+              if (listing == null) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Listing not found')));
+                return;
+              }
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => ListingDetailsPage(listing: listing)),
+              );
+            },
           )),
         ],
       ),

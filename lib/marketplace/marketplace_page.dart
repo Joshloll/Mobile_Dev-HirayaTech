@@ -8,6 +8,7 @@ import 'package:mobiledev_ecowaste/widgets/app_drawer.dart';
 import 'chats_list_page.dart';
 import 'simple_listing/listing_type_selection_page.dart';
 import 'simple_listing/listings_feed_page.dart';
+import 'transactions_page.dart';
 import 'all_devices_page.dart';
 import 'device_details_page.dart';
 
@@ -55,7 +56,7 @@ class _MarketplacePageState extends State<MarketplacePage> {
         actions = [
           Builder(
             builder: (context) => IconButton(
-              icon: const Icon(Icons.chat_bubble_outline),
+              icon: const Icon(Icons.chat_bubble_outline, size: 28),
               onPressed: () {
                 Navigator.push(
                   context,
@@ -63,6 +64,15 @@ class _MarketplacePageState extends State<MarketplacePage> {
                 );
               },
             ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.receipt_long_outlined),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const TransactionsPage()),
+              );
+            },
           ),
         ];
         break;

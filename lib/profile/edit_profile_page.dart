@@ -1,10 +1,6 @@
-import 'dart:io';
-import 'dart:typed_data';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:mobiledev_ecowaste/models/user_model.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:mobiledev_ecowaste/services/supabase_service.dart';
 
 class EditProfilePage extends StatefulWidget {
@@ -15,28 +11,25 @@ class EditProfilePage extends StatefulWidget {
 }
 
 class _EditProfilePageState extends State<EditProfilePage> {
-  bool _newsletterEnabled = false;
   bool _isLoading = true;
   bool _isSaving = false;
 
   // Controllers to manage the text in the TextFields
   late TextEditingController _nameController;
-  late TextEditingController _emailController;
-  late TextEditingController _phoneController;
+  late TextEditingController _passwordController;
+  late TextEditingController _confirmPasswordController;
 
   final _supabaseService = SupabaseService();
   UserProfile? _userProfile;
-  File? _selectedImage;
-  Uint8List? _selectedImageBytes; // for web
-  String? _currentAvatarUrl;
+  // Note: avatar editing is disabled per requirements
 
   @override
   void initState() {
     super.initState();
     // Initialize controllers
     _nameController = TextEditingController();
-    _emailController = TextEditingController();
-    _phoneController = TextEditingController();
+    _passwordController = TextEditingController();
+    _confirmPasswordController = TextEditingController();
     _loadUserProfile();
   }
 
@@ -49,27 +42,10 @@ class _EditProfilePageState extends State<EditProfilePage> {
         setState(() {
           _userProfile = UserProfile.fromJson(profileData);
           _nameController.text = _userProfile!.name;
-          _emailController.text = _userProfile!.email;
-          _phoneController.text = _userProfile!.phoneNumber ?? '';
-          _currentAvatarUrl = _userProfile!.avatarUrl;
           _isLoading = false;
         });
       } else {
         setState(() { _isLoading = false; });
-      }
-    }
-  }
-
-  Future<void> _pickImage() async {
-    final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
-    
-    if (image != null) {
-      if (kIsWeb) {
-        final bytes = await image.readAsBytes();
-        setState(() { _selectedImageBytes = bytes; });
-      } else {
-        setState(() { _selectedImage = File(image.path); });
       }
     }
   }
@@ -79,35 +55,30 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
     setState(() { _isSaving = true; });
 
-    String? newAvatarUrl;
-    
-    // Upload new image if selected
-    if (kIsWeb && _selectedImageBytes != null) {
-      newAvatarUrl = await _supabaseService.uploadProfileImageBytes(
-        _userProfile!.id,
-        _selectedImageBytes!,
-      );
-    } else if (_selectedImage != null) {
-      newAvatarUrl = await _supabaseService.uploadProfileImage(
-        _userProfile!.id,
-        _selectedImage!,
-      );
-    }
-
     // Update profile
     final error = await _supabaseService.updateUserProfile(
       userId: _userProfile!.id,
       name: _nameController.text.trim(),
-      phoneNumber: _phoneController.text.trim().isNotEmpty 
-          ? _phoneController.text.trim() 
-          : null,
-      avatarUrl: newAvatarUrl,
     );
+
+    // Optional: update password
+    String? pwError;
+    final newPw = _passwordController.text.trim();
+    final confirmPw = _confirmPasswordController.text.trim();
+    if (newPw.isNotEmpty || confirmPw.isNotEmpty) {
+      if (newPw.length < 6) {
+        pwError = 'Password must be at least 6 characters';
+      } else if (newPw != confirmPw) {
+        pwError = 'Passwords do not match';
+      } else {
+        pwError = await _supabaseService.updatePassword(newPw);
+      }
+    }
 
     if (mounted) {
       setState(() { _isSaving = false; });
 
-      if (error == null) {
+      if (error == null && pwError == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             backgroundColor: Colors.green,
@@ -119,7 +90,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             backgroundColor: Colors.red,
-            content: Text('Error: $error'),
+            content: Text('Error: ${error ?? pwError}'),
           ),
         );
       }
@@ -129,8 +100,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
   @override
   void dispose() {
     _nameController.dispose();
-    _emailController.dispose();
-    _phoneController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
   }
 
@@ -167,17 +138,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildProfilePhotoSection(),
-                  const SizedBox(height: 32),
-                  _buildTextField(label: 'Name', controller: _nameController),
+                  _buildTextField(label: 'Username', controller: _nameController),
                   const SizedBox(height: 16),
-                  _buildTextField(label: 'Email', controller: _emailController),
-                  const SizedBox(height: 16),
-                  _buildTextField(label: 'Phone Number', placeholder: 'Enter your phone number', controller: _phoneController),
-                  const SizedBox(height: 24),
-                  _buildChangePasswordButton(),
-                  const SizedBox(height: 32),
-                  _buildCommunicationPreferences(),
+                  _buildPasswordFields(),
                 ],
               ),
             ),
@@ -188,48 +151,16 @@ class _EditProfilePageState extends State<EditProfilePage> {
     );
   }
 
-  Widget _buildProfilePhotoSection() {
-    ImageProvider imageProvider;
-    if (kIsWeb && _selectedImageBytes != null) {
-      imageProvider = MemoryImage(_selectedImageBytes!);
-    } else if (_selectedImage != null) {
-      imageProvider = FileImage(_selectedImage!);
-    } else if (_currentAvatarUrl != null) {
-      imageProvider = NetworkImage(_currentAvatarUrl!);
-    } else {
-      imageProvider = const NetworkImage('https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200');
-    }
-
-    return Center(
-      child: Column(
-        children: [
-          Stack(
-            children: [
-              CircleAvatar(
-                radius: 64,
-                backgroundImage: imageProvider,
-              ),
-              Positioned.fill(
-                child: Container(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.black.withOpacity(0.4),
-                  ),
-                  child: IconButton(
-                    icon: const Icon(Icons.edit, color: Colors.white, size: 32),
-                    onPressed: _pickImage,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          TextButton(
-            onPressed: _pickImage,
-            child: const Text('Change Profile Photo', style: TextStyle(color: Color(0xFF3A86FF))),
-          ),
-        ],
-      ),
+  Widget _buildPasswordFields() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Change Password (optional)', style: GoogleFonts.splineSans(fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        _buildTextField(label: 'New Password', controller: _passwordController, placeholder: 'Enter new password'),
+        const SizedBox(height: 16),
+        _buildTextField(label: 'Confirm Password', controller: _confirmPasswordController, placeholder: 'Re-enter new password'),
+      ],
     );
   }
 
@@ -259,45 +190,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
     );
   }
 
-  Widget _buildChangePasswordButton() {
-    return ListTile(
-      onTap: () {},
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      tileColor: Colors.grey.shade100,
-      title: const Text('Change Password'),
-      trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-    );
-  }
-
-  Widget _buildCommunicationPreferences() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Communication Preferences',
-          style: GoogleFonts.splineSans(
-            color: const Color(0xFF1D3557),
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 8),
-        SwitchListTile(
-          title: const Text('Newsletter'),
-          subtitle: Text('Receive updates and offers', style: TextStyle(color: Colors.grey.shade600)),
-          value: _newsletterEnabled,
-          onChanged: (bool value) {
-            setState(() {
-              _newsletterEnabled = value;
-            });
-          },
-          activeColor: const Color(0xFF3A86FF),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          tileColor: Colors.grey.shade100,
-        ),
-      ],
-    );
-  }
 
   Widget _buildFooterButtons() {
     return Container(

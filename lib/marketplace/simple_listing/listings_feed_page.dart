@@ -208,6 +208,15 @@ class _ListingsFeedPageState extends State<ListingsFeedPage> {
                         fontSize: 14,
                       ),
                     ),
+                    const SizedBox(height: 4),
+                    // Short description
+                    if ((listing['description'] as String?) != null)
+                      Text(
+                        (listing['description'] as String).trim(),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: Colors.grey[700], fontSize: 12),
+                      ),
                     const Spacer(),
                     
                     // Price or info

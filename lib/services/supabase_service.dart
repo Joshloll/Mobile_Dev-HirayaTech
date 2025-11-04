@@ -123,6 +123,15 @@ class SupabaseService {
     }
   }
 
+  Future<String?> updatePassword(String newPassword) async {
+    try {
+      await client.auth.updateUser(UserAttributes(password: newPassword));
+      return null;
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
   // UPLOAD PROFILE IMAGE
   Future<String?> uploadProfileImage(String userId, File imageFile) async {
     try {
@@ -656,6 +665,123 @@ class SupabaseService {
     } catch (e) {
       print('Error fetching notifications: $e');
       return [];
+    }
+  }
+
+  Future<void> addNotification({required String userId, required String title, String? body, String? listingId}) async {
+    try {
+      await client.from('notifications').insert({
+        'user_id': userId,
+        'title': title,
+        'body': body,
+        'listing_id': listingId,
+        'created_at': DateTime.now().toIso8601String(),
+      });
+    } catch (_) {}
+  }
+
+  // Chat image upload helper (uses dedicated bucket "messages")
+  Future<String?> pickAndUploadChatImage() async {
+    try {
+      // Use image_picker via cross-platform conditional import not shown here; instead, rely on upload via bytes/file similar to other helpers
+      // To keep it simple, reusing listing image pickers is omitted; integrate image_picker in UI for actual files and call uploadChatImageBytes/File below.
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  Future<String?> uploadChatImageBytes(Uint8List bytes, {String? fileExt}) async {
+    try {
+      final user = currentUser; if (user == null) return null;
+      final ext = fileExt ?? 'jpg';
+      final fileName = '${user.id}-${DateTime.now().millisecondsSinceEpoch}.$ext';
+      final filePath = 'messages/$fileName';
+      await client.storage.from('messages').uploadBinary(
+        filePath,
+        bytes,
+        fileOptions: const FileOptions(upsert: true),
+      );
+      return client.storage.from('messages').getPublicUrl(filePath);
+    } catch (e) { return null; }
+  }
+
+  Future<String?> uploadChatImageFile(File file) async {
+    try {
+      final user = currentUser; if (user == null) return null;
+      final fileExt = file.path.split('.').last;
+      final fileName = '${user.id}-${DateTime.now().millisecondsSinceEpoch}.$fileExt';
+      final filePath = 'messages/$fileName';
+      await client.storage.from('messages').upload(filePath, file, fileOptions: const FileOptions(upsert: true));
+      return client.storage.from('messages').getPublicUrl(filePath);
+    } catch (e) { return null; }
+  }
+
+  // Listings helpers
+  Future<Map<String, dynamic>?> getListingById(String listingId) async {
+    try {
+      final res = await client
+          .from('listings_with_users')
+          .select()
+          .eq('id', listingId)
+          .maybeSingle();
+      return res == null ? null : Map<String, dynamic>.from(res);
+    } catch (e) {
+      print('Error fetching listing: $e');
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>?> getPendingTransactionForListing(String listingId) async {
+    try {
+      final res = await client
+          .from('market_transactions')
+          .select()
+          .eq('listing_id', listingId)
+          .eq('status', 'pending')
+          .order('created_at', ascending: false)
+          .maybeSingle();
+      return res == null ? null : Map<String, dynamic>.from(res);
+    } catch (e) {
+      print('Error fetching pending transaction: $e');
+      return null;
+    }
+  }
+
+  // Cancel flows
+  Future<String?> cancelSale(String transactionId) async {
+    try {
+      await client.rpc('cancel_transaction', params: { 'p_tx_id': transactionId });
+      return null;
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
+  Future<String?> cancelTrade(String transactionId) async {
+    try {
+      await client.rpc('cancel_transaction', params: { 'p_tx_id': transactionId });
+      return null;
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
+  Future<String?> cancelDonation(String transactionId) async {
+    try {
+      await client.rpc('cancel_transaction', params: { 'p_tx_id': transactionId });
+      return null;
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
+  Future<String?> cancelTransaction(String transactionId) async {
+    try {
+      await client.rpc('cancel_transaction', params: { 'p_tx_id': transactionId });
+      return null;
+    } catch (e) {
+      return e.toString();
     }
   }
 

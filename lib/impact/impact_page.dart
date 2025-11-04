@@ -191,10 +191,11 @@ class _ImpactPageState extends State<ImpactPage> {
   }
 
   Widget _buildBadgesGrid() {
+    final earned = _earnedBadges(_points);
     final badges = [
-      {'name': 'Recycle Rookie', 'image': 'assets/images/badge_rookie.png'},
-      {'name': 'Trade Titan', 'image': 'assets/images/badge_titan.png'},
-      {'name': 'Donation Duke', 'image': 'assets/images/badge_duke.png'},
+      {'name': 'Recycle Rookie', 'image': 'assets/images/badge_rookie.png', 'earned': earned.contains('Recycle Rookie')},
+      {'name': 'Saver Titan', 'image': 'assets/images/badge_titan.png', 'earned': earned.contains('Saver Titan')},
+      {'name': 'Kid of Mother Nature', 'image': 'assets/images/badge_duke.png', 'earned': earned.contains('Kid of Mother Nature')},
     ];
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
@@ -203,18 +204,32 @@ class _ImpactPageState extends State<ImpactPage> {
         children: badges.map((badge) {
           return Column(
             children: [
-              CircleAvatar(
-                radius: 40,
-                backgroundColor: Colors.grey.shade200,
-                backgroundImage: AssetImage(badge['image']!),
+              Stack(
+                children: [
+                  CircleAvatar(
+                    radius: 40,
+                    backgroundColor: Colors.grey.shade200,
+                    backgroundImage: AssetImage(badge['image'] as String),
+                  ),
+                  if (!(badge['earned'] as bool))
+                    Positioned.fill(child: Container(decoration: BoxDecoration(color: Colors.white.withOpacity(0.6), shape: BoxShape.circle))),
+                ],
               ),
               const SizedBox(height: 8),
-              Text(badge['name']!, style: const TextStyle(fontWeight: FontWeight.w500)),
+              Text(badge['name'] as String, style: const TextStyle(fontWeight: FontWeight.w500)),
             ],
           );
         }).toList(),
       ),
     );
+  }
+
+  List<String> _earnedBadges(int points) {
+    final res = <String>[];
+    if (points >= 300) res.add('Recycle Rookie');
+    if (points >= 700) res.add('Saver Titan');
+    if (points >= 1000) res.add('Kid of Mother Nature');
+    return res;
   }
 
   Widget _buildLeaderboardList() {

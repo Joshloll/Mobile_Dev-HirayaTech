@@ -25,6 +25,7 @@ class _ChatPageState extends State<ChatPage> {
   final _supabaseService = SupabaseService();
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
+  String? _pendingImageUrl;
   List<Map<String, dynamic>> _messages = [];
   bool _isLoading = true;
   bool _isSending = false;
@@ -63,7 +64,7 @@ class _ChatPageState extends State<ChatPage> {
 
   Future<void> _sendMessage() async {
     final content = _messageController.text.trim();
-    if (content.isEmpty) return;
+    if (content.isEmpty && _pendingImageUrl == null) return;
 
     setState(() { _isSending = true; });
 
@@ -71,6 +72,7 @@ class _ChatPageState extends State<ChatPage> {
       conversationId: widget.conversationId,
       content: content,
       recipientUserId: widget.otherUserId,
+      imageUrl: _pendingImageUrl,
     );
 
     if (mounted) {
@@ -78,6 +80,7 @@ class _ChatPageState extends State<ChatPage> {
 
       if (error == null) {
         _messageController.clear();
+        _pendingImageUrl = null;
         await _loadMessages();
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -131,9 +134,10 @@ class _ChatPageState extends State<ChatPage> {
                               : null;
 
                           return _buildMessageBubble(
-                            content: message['content'] as String,
+                            content: message['content'] as String? ?? '',
                             isSentByMe: isSentByMe,
                             timestamp: createdAt,
+                            imageUrl: message['image_url'] as String?,
                           );
                         },
                       ),
@@ -150,6 +154,7 @@ class _ChatPageState extends State<ChatPage> {
     required String content,
     required bool isSentByMe,
     DateTime? timestamp,
+    String? imageUrl,
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -175,12 +180,30 @@ class _ChatPageState extends State<ChatPage> {
                       bottomRight: Radius.circular(isSentByMe ? 4 : 20),
                     ),
                   ),
-                  child: Text(
-                    content,
-                    style: TextStyle(
-                      color: isSentByMe ? Colors.white : Colors.black87,
-                      fontSize: 16,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (imageUrl != null)
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: Image.network(
+                            imageUrl,
+                            width: 220,
+                            fit: BoxFit.cover,
+                            errorBuilder: (c, e, s) => const Icon(Icons.broken_image),
+                          ),
+                        ),
+                      if (content.isNotEmpty) ...[
+                        if (imageUrl != null) const SizedBox(height: 8),
+                        Text(
+                          content,
+                          style: TextStyle(
+                            color: isSentByMe ? Colors.white : Colors.black87,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
                 if (timestamp != null) ...[
@@ -243,6 +266,11 @@ class _ChatPageState extends State<ChatPage> {
       child: SafeArea(
         child: Row(
           children: [
+            IconButton(
+              tooltip: 'Attach image',
+              onPressed: _isSending ? null : _pickAndUploadImage,
+              icon: const Icon(Icons.attachment),
+            ),
             Expanded(
               child: TextField(
                 controller: _messageController,
@@ -282,6 +310,20 @@ class _ChatPageState extends State<ChatPage> {
         ),
       ),
     );
+  }
+
+  Future<void> _pickAndUploadImage() async {
+    // For web and mobile: delegate to SupabaseService uploadListingImageBytes/File pattern using a new helper
+    // Here we simply open the file picker using image_picker
+    // To keep dependencies minimal, we rely on a service helper to upload from a picked file
+    final url = await _supabaseService.pickAndUploadChatImage();
+    if (url != null) {
+      setState(() { _pendingImageUrl = url; });
+      // Auto-send if no text content
+      if (_messageController.text.trim().isEmpty) {
+        _sendMessage();
+      }
+    }
   }
 
   String _formatTime(DateTime dateTime) {

@@ -26,6 +26,7 @@ create table if not exists public.notifications (
   user_id uuid not null references auth.users(id),
   title text not null,
   body text,
+  listing_id uuid, -- <-- MODIFICATION: Added column
   created_at timestamptz not null default now(),
   read_at timestamptz
 );
@@ -68,8 +69,9 @@ begin
   insert into public.market_transactions(listing_id, type, status, seller_id, buyer_id)
   values (p_listing_id, 'sell', 'pending', v_listing.user_id, auth.uid()) returning id into v_tx_id;
 
-  insert into public.notifications(user_id, title, body)
-  values (v_listing.user_id, 'Purchase request', 'Someone wants to buy your item.');
+  -- MODIFICATION: Added listing_id
+  insert into public.notifications(user_id, title, body, listing_id)
+  values (v_listing.user_id, 'Purchase request', 'Someone wants to buy your item.', p_listing_id);
 
   return v_tx_id;
 end; $$ language plpgsql security definer;
@@ -91,14 +93,20 @@ begin
   insert into public.points_ledger(user_id, points, reason, related_id) values (v_tx.seller_id, 75, 'sell_completed', v_tx.listing_id);
   if v_tx.buyer_id is not null then
     insert into public.points_ledger(user_id, points, reason, related_id) values (v_tx.buyer_id, 75, 'buy_completed', v_tx.listing_id);
-    insert into public.notifications(user_id, title, body) values (v_tx.buyer_id, 'Sale confirmed', 'Your purchase was confirmed.');
+    -- MODIFICATION: Added listing_id
+    insert into public.notifications(user_id, title, body, listing_id) 
+    values (v_tx.buyer_id, 'Sale confirmed', 'Your purchase was confirmed.', v_tx.listing_id);
   end if;
 end; $$ language plpgsql security definer;
 
 -- Propose trade
 create or replace function public.propose_trade(p_listing_id uuid, p_partner_listing_id uuid)
 returns uuid as $$
-declare v_listing record; v_partner record; v_tx_id uuid; begin
+declare 
+  v_listing record; 
+  v_partner record; 
+  v_tx_id uuid; 
+begin
   select * into v_listing from public.listings where id = p_listing_id for update;
   select * into v_partner from public.listings where id = p_partner_listing_id for update;
   if v_listing is null or v_partner is null then raise exception 'Listings not found'; end if;
@@ -108,14 +116,18 @@ declare v_listing record; v_partner record; v_tx_id uuid; begin
   update public.listings set status = 'pending' where id in (p_listing_id, p_partner_listing_id);
   insert into public.market_transactions(listing_id, type, status, seller_id, buyer_id, trade_partner_listing_id)
   values (p_listing_id, 'trade', 'pending', v_listing.user_id, v_partner.user_id, p_partner_listing_id) returning id into v_tx_id;
-  insert into public.notifications(user_id, title, body) values (v_listing.user_id, 'Trade proposal', 'You have a new trade proposal.');
+  -- MODIFICATION: Added listing_id
+  insert into public.notifications(user_id, title, body, listing_id) 
+  values (v_listing.user_id, 'Trade proposal', 'You have a new trade proposal.', p_listing_id);
   return v_tx_id;
 end; $$ language plpgsql security definer;
 
 -- Confirm trade (both users must confirm)
 create or replace function public.confirm_trade(p_tx_id uuid)
 returns void as $$
-declare v_tx record; begin
+declare 
+  v_tx record; 
+begin
   select * into v_tx from public.market_transactions where id = p_tx_id for update;
   if v_tx is null or v_tx.type <> 'trade' then raise exception 'Invalid transaction'; end if;
 
@@ -127,28 +139,37 @@ declare v_tx record; begin
   insert into public.points_ledger(user_id, points, reason, related_id) values (v_tx.seller_id, 150, 'trade_completed', v_tx.listing_id);
   if v_tx.buyer_id is not null then
     insert into public.points_ledger(user_id, points, reason, related_id) values (v_tx.buyer_id, 150, 'trade_completed', v_tx.trade_partner_listing_id);
-    insert into public.notifications(user_id, title, body) values (v_tx.buyer_id, 'Trade confirmed', 'Your trade was confirmed.');
+    -- MODIFICATION: Added listing_id
+    insert into public.notifications(user_id, title, body, listing_id) 
+    values (v_tx.buyer_id, 'Trade confirmed', 'Your trade was confirmed.', v_tx.listing_id);
   end if;
 end; $$ language plpgsql security definer;
 
 -- Request donation
 create or replace function public.request_donation(p_listing_id uuid)
 returns uuid as $$
-declare v_listing record; v_tx_id uuid; begin
+declare 
+  v_listing record; 
+  v_tx_id uuid; 
+begin
   select * into v_listing from public.listings where id = p_listing_id for update;
   if v_listing is null or v_listing.listing_type <> 'donate' then raise exception 'Not a donation'; end if;
   if v_listing.status <> 'active' then raise exception 'Listing not available'; end if;
   update public.listings set status = 'pending' where id = p_listing_id;
   insert into public.market_transactions(listing_id, type, status, seller_id, buyer_id)
   values (p_listing_id, 'donate', 'pending', v_listing.user_id, auth.uid()) returning id into v_tx_id;
-  insert into public.notifications(user_id, title, body) values (v_listing.user_id, 'Donation request', 'Someone requested your donation.');
+  -- MODIFICATION: Added listing_id
+  insert into public.notifications(user_id, title, body, listing_id) 
+  values (v_listing.user_id, 'Donation request', 'Someone requested your donation.', p_listing_id);
   return v_tx_id;
 end; $$ language plpgsql security definer;
 
 -- Confirm donation (donor)
 create or replace function public.confirm_donation(p_tx_id uuid)
 returns void as $$
-declare v_tx record; begin
+declare 
+  v_tx record; 
+begin
   select * into v_tx from public.market_transactions where id = p_tx_id for update;
   if v_tx is null or v_tx.type <> 'donate' then raise exception 'Invalid transaction'; end if;
   if v_tx.seller_id <> auth.uid() then raise exception 'Only donor can confirm'; end if;
@@ -158,20 +179,37 @@ declare v_tx record; begin
   insert into public.points_ledger(user_id, points, reason, related_id) values (v_tx.seller_id, 230, 'donation_confirmed', v_tx.listing_id);
   if v_tx.buyer_id is not null then
     insert into public.points_ledger(user_id, points, reason, related_id) values (v_tx.buyer_id, 150, 'donation_received', v_tx.listing_id);
-    insert into public.notifications(user_id, title, body) values (v_tx.buyer_id, 'Donation confirmed', 'Your donation request was confirmed.');
+    -- MODIFICATION: Added listing_id
+    insert into public.notifications(user_id, title, body, listing_id) 
+    values (v_tx.buyer_id, 'Donation confirmed', 'Your donation request was confirmed.', v_tx.listing_id);
   end if;
 end; $$ language plpgsql security definer;
 
--- Donation tracker view (completed donations only)
-create or replace view public.completed_donations as
-select 
-  mt.id as transaction_id,
-  mt.created_at,
-  l.title,
-  mt.seller_id as donor_id,
-  mt.buyer_id as recipient_id
-from public.market_transactions mt
-join public.listings l on l.id = mt.listing_id
-where mt.type = 'donate' and mt.status = 'completed';
+-- NEW FUNCTION: Cancel Transaction
+create or replace function public.cancel_transaction(p_tx_id uuid)
+returns void as $$
+declare
+  v_tx record;
+  v_other_user_id uuid;
+  v_notification_title text;
+  v_notification_body text;
+begin
+  -- Get the transaction and lock the row
+  select * into v_tx from public.market_transactions where id = p_tx_id for update;
 
+  -- Check if transaction exists and is pending
+  if v_tx is null or v_tx.status <> 'pending' then
+    raise exception 'Transaction not found or not pending';
+  end if;
 
+  -- Check if the current user is either the seller or the buyer
+  if auth.uid() <> v_tx.seller_id and auth.uid() <> v_tx.buyer_id then
+    raise exception 'You do not have permission to cancel this transaction';
+  end if;
+
+  -- Update the transaction status to 'cancelled'
+  update public.market_transactions
+  set status = 'cancelled', updated_at = now()
+  where id = p_tx_id;
+
+  -- Re-activate the listing(s)

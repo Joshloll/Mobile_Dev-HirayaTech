@@ -25,6 +25,7 @@ class ListingDetailsPage extends StatelessWidget {
 
     final currentUser = SupabaseService().currentUser;
     final isOwnListing = currentUser?.id == userId;
+    final isPending = (listing['status'] as String?) == 'pending';
 
     return Scaffold(
       appBar: AppBar(
@@ -199,6 +200,8 @@ class ListingDetailsPage extends StatelessWidget {
                 ),
               ),
             ),
+          if (isOwnListing && isPending)
+            _buildOwnerPendingActions(context, listingType),
         ],
       ),
     );
@@ -281,6 +284,78 @@ class ListingDetailsPage extends StatelessWidget {
           ),
         ),
       );
+    }
+  }
+
+  Widget _buildOwnerPendingActions(BuildContext context, String listingType) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      child: SafeArea(
+        child: Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: () => _ownerCancel(context, listingType),
+                child: const Text('Cancel'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: ElevatedButton(
+                onPressed: () => _ownerConfirm(context, listingType),
+                child: const Text('Confirm'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _ownerConfirm(BuildContext context, String listingType) async {
+    final service = SupabaseService();
+    final listingId = listing['id'] as String;
+    final tx = await service.getPendingTransactionForListing(listingId);
+    if (tx == null) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No pending transaction found')));
+      }
+      return;
+    }
+    String? err;
+    if (listingType == 'sell') err = await service.confirmSale(tx['id'] as String);
+    else if (listingType == 'trade') err = await service.confirmTrade(tx['id'] as String);
+    else if (listingType == 'donate') err = await service.confirmDonation(tx['id'] as String);
+
+    if (context.mounted) {
+      if (err == null) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(backgroundColor: Colors.green, content: Text('Transaction confirmed.')));
+        Navigator.of(context).pop();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: Colors.red, content: Text('Error: $err')));
+      }
+    }
+  }
+
+  Future<void> _ownerCancel(BuildContext context, String listingType) async {
+    final service = SupabaseService();
+    final listingId = listing['id'] as String;
+    final tx = await service.getPendingTransactionForListing(listingId);
+    if (tx == null) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No pending transaction found')));
+      }
+      return;
+    }
+    final err = await service.cancelTransaction(tx['id'] as String);
+
+    if (context.mounted) {
+      if (err == null) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Transaction cancelled.')));
+        Navigator.of(context).pop();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: Colors.red, content: Text('Error: $err')));
+      }
     }
   }
 
