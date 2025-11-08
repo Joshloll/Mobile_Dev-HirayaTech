@@ -57,6 +57,29 @@ class SupabaseService {
     }
   }
 
+  // ENSURE PROFILE ROW EXISTS (useful after data wipes)
+  Future<String?> ensureProfile({
+    required String userId,
+    required String email,
+    required String name,
+    String? avatarUrl,
+  }) async {
+    try {
+      final existing = await getUserProfile(userId);
+      if (existing != null) return null;
+      await client.from('profiles').insert({
+        'id': userId,
+        'email': email,
+        'name': name,
+        'avatar_url': avatarUrl ?? 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200',
+        'created_at': DateTime.now().toIso8601String(),
+      });
+      return null;
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
   // SIGN IN
   Future<String?> signIn({
     required String email,
@@ -201,25 +224,56 @@ class SupabaseService {
     String? deviceType,
     String? brand,
     String? model,
+    String? storage,
+    String? color,
+    List<String>? accessories,
+    String? repairHistory,
+    Map<String, dynamic>? verification,
   }) async {
     try {
       final user = currentUser;
       if (user == null) return 'User not authenticated';
 
-      await client.from('listings').insert({
+      final data = <String, dynamic>{
         'user_id': user.id,
         'listing_type': listingType,
         'title': title,
         'description': description,
-        'image_urls': imageUrls,
-        'price': price,
-        'trade_details': tradeDetails,
-        'device_type': deviceType,
-        'brand': brand,
-        'model': model,
         'status': 'active',
         'created_at': DateTime.now().toIso8601String(),
-      });
+      };
+      if (imageUrls != null) data['image_urls'] = imageUrls;
+      if (price != null) data['price'] = price;
+      if (tradeDetails != null) data['trade_details'] = tradeDetails;
+      if (deviceType != null) data['device_type'] = deviceType;
+      if (brand != null) data['brand'] = brand;
+      if (model != null) data['model'] = model;
+      if (storage != null) data['storage'] = storage;
+      if (color != null) data['color'] = color;
+      if (accessories != null) data['accessories'] = accessories;
+      if (repairHistory != null) data['repairHistory'] = repairHistory;
+      if (verification != null) data['verification'] = verification;
+
+      try {
+        await client.from('listings').insert(data);
+      } catch (e) {
+        // Fallback: retry with legacy minimal payload to avoid failures when optional columns are absent
+        final fallback = <String, dynamic>{
+          'user_id': user.id,
+          'listing_type': listingType,
+          'title': title,
+          'description': description,
+          if (imageUrls != null) 'image_urls': imageUrls,
+          if (price != null) 'price': price,
+          if (tradeDetails != null) 'trade_details': tradeDetails,
+          if (deviceType != null) 'device_type': deviceType,
+          if (brand != null) 'brand': brand,
+          if (model != null) 'model': model,
+          'status': 'active',
+          'created_at': DateTime.now().toIso8601String(),
+        };
+        await client.from('listings').insert(fallback);
+      }
 
       return null; // Success
     } catch (e) {
@@ -552,13 +606,15 @@ class SupabaseService {
     try {
       final user = currentUser;
       if (user == null) return 0;
-      final res = await client
-          .from('user_points')
+      final rows = await client
+          .from('points_ledger')
           .select('points')
-          .eq('user_id', user.id)
-          .maybeSingle();
-      if (res == null) return 0;
-      return (res['points'] as int? ?? 0);
+          .eq('user_id', user.id);
+      int total = 0;
+      for (final r in List<Map<String, dynamic>>.from(rows)) {
+        total += (r['points'] as int? ?? 0);
+      }
+      return total;
     } catch (e) {
       print('Error fetching user points: $e');
       return 0;
@@ -603,10 +659,16 @@ class SupabaseService {
 
   Future<String?> proposeTrade({required String listingId, required String partnerListingId}) async {
     try {
-      final res = await client.rpc('propose_trade', params: { 'p_listing_id': listingId, 'p_partner_listing_id': partnerListingId });
-      return res?.toString();
+      final res = await client.rpc('propose_trade', params: {
+        'p_listing_id': listingId,
+        'p_partner_listing_id': partnerListingId,
+      });
+      if (res == null) return null;
+      return res.toString();
     } catch (e) {
-      return e.toString();
+      // Log and signal failure with null so UI doesn't show success erroneously
+      print('proposeTrade error: $e');
+      return null;
     }
   }
 
@@ -639,12 +701,22 @@ class SupabaseService {
 
   Future<List<Map<String, dynamic>>> getUserTransactionsDetailed(String userId) async {
     try {
+      // Explicit relationship alias to avoid join name issues
       final res = await client
           .from('market_transactions')
-          .select('*, listings(*), buyer_id, seller_id')
+          .select('id,type,status,seller_id,buyer_id,listing_id,trade_partner_listing_id,created_at,listings:listing_id(*)')
           .or('seller_id.eq.$userId,buyer_id.eq.$userId')
           .order('created_at', ascending: false);
-      return List<Map<String, dynamic>>.from(res);
+      final list = List<Map<String, dynamic>>.from(res);
+      try {
+        print('[TX DEBUG] currentUser=${currentUser?.id}');
+        print('[TX DEBUG] user=$userId count=${list.length}');
+        for (var i = 0; i < (list.length < 5 ? list.length : 5); i++) {
+          final t = list[i];
+          print('[TX DEBUG] ${t['id']} type=${t['type']} status=${t['status']} seller=${t['seller_id']} buyer=${t['buyer_id']}');
+        }
+      } catch (_) {}
+      return list;
     } catch (e) {
       print('Error fetching transactions: $e');
       return [];
@@ -720,8 +792,9 @@ class SupabaseService {
   // Listings helpers
   Future<Map<String, dynamic>?> getListingById(String listingId) async {
     try {
+      // Fetch from base table to include new columns (e.g., verification, accessories)
       final res = await client
-          .from('listings_with_users')
+          .from('listings')
           .select()
           .eq('id', listingId)
           .maybeSingle();

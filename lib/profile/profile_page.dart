@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:mobiledev_ecowaste/models/user_model.dart';
 import 'package:mobiledev_ecowaste/settings/settings_page.dart';
+import 'package:mobiledev_ecowaste/profile/edit_profile_page.dart';
 import 'package:mobiledev_ecowaste/marketplace/device_details_page.dart';
 import 'package:mobiledev_ecowaste/services/supabase_service.dart';
 import 'package:mobiledev_ecowaste/marketplace/simple_listing/listing_details_page.dart';
@@ -20,7 +21,6 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
   bool _isLoading = true;
   int _points = 0;
   List<Map<String, dynamic>> _pending = [];
-  List<Map<String, dynamic>> _notifications = [];
 
   @override
   void initState() { 
@@ -36,7 +36,6 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
       final points = await _supabaseService.getCurrentUserPoints();
       final txs = await _supabaseService.getUserTransactionsDetailed(user.id);
       final pending = txs.where((t) => (t['status'] as String?) == 'pending').toList();
-      final notifs = await _supabaseService.getNotifications();
       if (mounted) {
         setState(() {
           if (profileData != null) {
@@ -44,7 +43,6 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
           }
           _points = points;
           _pending = pending;
-          _notifications = notifs;
           _isLoading = false;
         });
       }
@@ -61,12 +59,37 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
         return <Widget>[
           SliverAppBar(
             title: const Text('Profile'),
-            actions: [ IconButton( icon: const Icon(Icons.settings_outlined), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const SettingsPage()))), ],
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.edit_outlined),
+                tooltip: 'Edit Profile',
+                onPressed: () async {
+                  final changed = await Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const EditProfilePage()),
+                  );
+                  if (changed == true) {
+                    _loadUserProfile();
+                  }
+                },
+              ),
+              IconButton(
+                icon: const Icon(Icons.settings_outlined),
+                onPressed: () async {
+                  final changed = await Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const SettingsPage()),
+                  );
+                  if (changed == true) {
+                    _loadUserProfile();
+                  }
+                },
+              ),
+            ],
           ),
           SliverToBoxAdapter(child: _buildProfileHeader()),
           SliverToBoxAdapter(child: _buildPointsRow()),
-          SliverToBoxAdapter(child: _buildPendingSection()),
-          SliverToBoxAdapter(child: _buildNotificationsSection()),
+          // Removed Pending Transactions and Notifications sections per request
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
@@ -92,9 +115,9 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
       body: TabBarView(
         controller: _tabController,
         children: [
-          _buildListingsList('sale'),
+          _buildListingsList('sell'),
           _buildListingsList('trade'),
-          _buildListingsList('donation'),
+          _buildListingsList('donate'),
         ],
       ),
     );
@@ -155,63 +178,71 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
     );
   }
 
-  Widget _buildPendingSection() {
-    return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Pending Transactions (${_pending.length})', style: GoogleFonts.splineSans(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          if (_pending.isEmpty) Text('No pending transactions', style: TextStyle(color: Colors.grey.shade600))
-          else ..._pending.map((t) => ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.hourglass_top, color: Colors.amber),
-            title: Text('${(t['type'] as String).toUpperCase()} - ${(t['status'] as String).toUpperCase()}'),
-            subtitle: Text(DateTime.parse(t['created_at'] as String).toLocal().toString()),
-          )),
-        ],
-      ),
+  Widget _buildListingsList(String type) {
+    final userId = _supabaseService.currentUser?.id;
+    if (userId == null) {
+      return const Center(child: Text('Not signed in'));
+    }
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _supabaseService.getUserListings(userId),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final items = snapshot.data!
+            .where((l) => (l['listing_type'] as String?) == type)
+            .toList();
+        if (items.isEmpty) {
+          return const Center(child: Text('No listings yet'));
+        }
+        return ListView.separated(
+          itemCount: items.length,
+          separatorBuilder: (_, __) => const Divider(height: 1),
+          itemBuilder: (context, index) {
+            final item = items[index];
+            final images = item['image_urls'] as List?;
+            final thumb = (images != null && images.isNotEmpty) ? images.first as String : null;
+            return ListTile(
+              leading: thumb != null
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.network(thumb, width: 56, height: 56, fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const Icon(Icons.image_not_supported)),
+                    )
+                  : const CircleAvatar(child: Icon(Icons.devices)),
+              title: Text(item['title'] as String? ?? 'Listing'),
+              subtitle: Text((item['status'] as String?)?.toString().toUpperCase() ?? 'ACTIVE'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () async {
+                final listing = await _supabaseService.getListingById(item['id'] as String);
+                if (!mounted || listing == null) return;
+                Navigator.push(context, MaterialPageRoute(builder: (_) => ListingDetailsPage(listing: listing)));
+              },
+            );
+          },
+        );
+      },
     );
+  }
+}
+
+class _SliverTabBarDelegate extends SliverPersistentHeaderDelegate {
+  _SliverTabBarDelegate(this._tabBar);
+  final TabBar _tabBar;
+
+  @override
+  double get minExtent => _tabBar.preferredSize.height;
+
+  @override
+  double get maxExtent => _tabBar.preferredSize.height;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return Container(color: Colors.white, child: _tabBar);
   }
 
-  Widget _buildNotificationsSection() {
-    return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Notifications (${_notifications.length})', style: GoogleFonts.splineSans(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          if (_notifications.isEmpty) Text('No notifications', style: TextStyle(color: Colors.grey.shade600))
-          else ..._notifications.map((n) => ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.notifications),
-            title: Text(n['title'] as String),
-            subtitle: Text((n['body'] as String?) ?? ''),
-            onTap: () async {
-              final listingId = n['listing_id'] as String?;
-              if (listingId == null) return;
-              final listing = await _supabaseService.getListingById(listingId);
-              if (!mounted) return;
-              if (listing == null) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Listing not found')));
-                return;
-              }
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => ListingDetailsPage(listing: listing)),
-              );
-            },
-          )),
-        ],
-      ),
-    );
+  @override
+  bool shouldRebuild(_SliverTabBarDelegate oldDelegate) {
+    return false;
   }
-  Widget _buildListingsList(String type) { final allItems = [ { 'name': 'iPhone 13 Pro', 'status': 'Active', 'type': 'sale', 'imageUrl': 'assets/images/ip13.png', 'condition': 'Excellent condition', 'price': '45,000', 'category': 'Sell', 'description': 'A top-tier flagship phone with a stunning ProMotion display.', 'storage': '256GB', 'color': 'Sierra Blue', 'accessories': ['Original Box', 'Charger & Cable'], 'repairHistory': 'None', 'verification': { 'powersOn': true, 'buttonsFunctional': true, 'batteryDrainsFast': false, 'screenDamage': false, 'touchResponsive': true } }, { 'name': 'Samsung Galaxy S22', 'status': 'Pending Review', 'type': 'sale', 'imageUrl': 'assets/images/samsung.png', 'condition': 'Like new', 'price': '35,000', 'category': 'Sell', 'description': 'Compact and powerful Android flagship with a vibrant display.', 'storage': '128GB', 'color': 'Phantom Black', 'accessories': ['Original Box', 'Charger & Cable'], 'repairHistory': 'None', 'verification': { 'powersOn': true, 'buttonsFunctional': true, 'batteryDrainsFast': false, 'screenDamage': false, 'touchResponsive': true } }, { 'name': 'MacBook Pro 16"', 'status': 'Traded', 'type': 'trade', 'imageUrl': 'https://images.unsplash.com/photo-1542393545-10f5cde2c810?w=100', 'condition': 'Barely used', 'price': '70,000', 'category': 'Trade', 'tradeDetails': 'Dell XPS 17', 'description': 'A high-performance laptop for creative professionals.', 'storage': '512GB SSD', 'color': 'Space Gray', 'accessories': ['Charger & Cable'], 'repairHistory': 'None', 'verification': { 'powersOn': true, 'buttonsFunctional': true, 'batteryDrainsFast': false, 'screenDamage': false, 'touchResponsive': true } }, { 'name': 'iPad Air', 'status': 'Active', 'type': 'trade', 'imageUrl': 'assets/images/ipad.png', 'condition': 'Good condition', 'price': '25,000', 'category': 'Trade', 'tradeDetails': 'Samsung Tab S8', 'description': 'Lightweight and versatile tablet with M1 power.', 'storage': '64GB', 'color': 'Starlight', 'accessories': ['Charger & Cable'], 'repairHistory': 'Screen replaced', 'verification': { 'powersOn': true, 'buttonsFunctional': true, 'batteryDrainsFast': false, 'screenDamage': false, 'touchResponsive': true } }, { 'name': 'Sony WH-1000XM4', 'status': 'Donated', 'type': 'donation', 'imageUrl': 'assets/images/sony.png', 'condition': 'Used', 'price': '0', 'category': 'Donate', 'description': 'Industry-leading noise-cancelling headphones.', 'storage': 'N/A', 'color': 'Black', 'accessories': ['Carrying Case'], 'repairHistory': 'None', 'verification': { 'powersOn': true, 'buttonsFunctional': true, 'batteryDrainsFast': false } }, ]; final filteredItems = allItems.where((item) => (item['type'] as String) == type).toList(); if (filteredItems.isEmpty) { return Container( color: Colors.white, child: Center( child: Text('No items listed for $type.', style: const TextStyle(color: Colors.grey)))); } return Container( color: Colors.white, child: ListView.builder( itemCount: filteredItems.length, itemBuilder: (context, index) { return _buildListingTile(filteredItems[index]); }, ), ); }
-  Color _getStatusColor(String status) { switch (status) { case 'Active': return Colors.green.shade500; case 'Pending Review': return Colors.amber.shade600; default: return Colors.grey.shade500; } }
-  Widget _buildListingTile(Map<String, dynamic> item) { final String imageUrl = item['imageUrl']! as String; final ImageProvider imageProvider = imageUrl.startsWith('assets/') ? AssetImage(imageUrl) : NetworkImage(imageUrl); return Container( color: Colors.white, child: ListTile( leading: ClipRRect( borderRadius: BorderRadius.circular(8), child: Image( image: imageProvider, width: 56, height: 56, fit: BoxFit.cover, ), ), title: Text(item['name']! as String, style: const TextStyle(fontWeight: FontWeight.w500)), subtitle: Row( children: [ Container( width: 8, height: 8, decoration: BoxDecoration( shape: BoxShape.circle, color: _getStatusColor(item['status']! as String)), ), const SizedBox(width: 6), Text(item['status']! as String), ], ), trailing: const Icon(Icons.chevron_right), onTap: () { Navigator.push( context, MaterialPageRoute( builder: (context) => DeviceDetailsPage(device: item), ), ); }, ), ); }
 }
-class _SliverTabBarDelegate extends SliverPersistentHeaderDelegate { _SliverTabBarDelegate(this._tabBar); final TabBar _tabBar; @override double get minExtent => _tabBar.preferredSize.height; @override double get maxExtent => _tabBar.preferredSize.height; @override Widget build( BuildContext context, double shrinkOffset, bool overlapsContent) { return Container(color: Colors.white, child: _tabBar); } @override bool shouldRebuild(_SliverTabBarDelegate oldDelegate) { return false; } }

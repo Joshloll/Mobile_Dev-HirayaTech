@@ -1,4 +1,4 @@
-// lib/marketplace/simple_listing/listings_feed_page.dart
+  // lib/marketplace/simple_listing/listings_feed_page.dart
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -141,34 +141,30 @@ class _ListingsFeedPageState extends State<ListingsFeedPage> {
         );
       },
       child: Card(
-        elevation: 2,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        elevation: 3,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Image
-            Expanded(
-              flex: 3,
-              child: Container(
-                decoration: BoxDecoration(
+            AspectRatio(
+              aspectRatio: 4 / 3,
+              child: ClipRRect(
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                child: Container(
                   color: Colors.grey[200],
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                  child: firstImage != null
+                      ? Hero(
+                          tag: listing['id'] ?? firstImage,
+                          child: Image.network(
+                            firstImage,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) => const Icon(Icons.image_not_supported, size: 50, color: Colors.grey),
+                          ),
+                        )
+                      : const Center(child: Icon(Icons.devices, size: 50, color: Colors.grey)),
                 ),
-                child: firstImage != null
-                    ? ClipRRect(
-                        borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-                        child: Image.network(
-                          firstImage,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            return const Icon(Icons.image_not_supported, size: 50, color: Colors.grey);
-                          },
-                        ),
-                      )
-                    : const Center(
-                        child: Icon(Icons.devices, size: 50, color: Colors.grey),
-                      ),
               ),
             ),
             
@@ -196,7 +192,7 @@ class _ListingsFeedPageState extends State<ListingsFeedPage> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 6),
                     
                     // Title
                     Text(
@@ -223,7 +219,10 @@ class _ListingsFeedPageState extends State<ListingsFeedPage> {
                     if (listingType == 'sell' && price != null)
                       Text(
                         '₱${NumberFormat("#,###").format(price)}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
+                          fontFamily: 'Roboto', // Peso sign support
                           color: Color(0xFF3A86FF),
                           fontWeight: FontWeight.bold,
                           fontSize: 16,

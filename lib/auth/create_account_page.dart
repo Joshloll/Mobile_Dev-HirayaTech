@@ -2,6 +2,8 @@
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:mobiledev_ecowaste/theme.dart';
 import 'package:mobiledev_ecowaste/services/auth_service.dart';
 
 class CreateAccountPage extends StatefulWidget {
@@ -103,7 +105,21 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
           child: Column(
             children: [
               Center(
-                child: Image.asset('assets/images/logo_leaf.png', height: 120),
+                child: Column(
+                  children: [
+                    Image.asset('assets/images/logo_leaf.png', height: 120),
+                    const SizedBox(height: 12),
+                    Text(
+                      'HIRAYATECH',
+                      style: GoogleFonts.splineSans(
+                        color: hirayaBlue,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 24,
+                        letterSpacing: 2,
+                      ),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 32),
               _buildTextField(label: 'Username', placeholder: 'Choose a username', controller: _usernameController),
@@ -123,10 +139,6 @@ class _CreateAccountPageState extends State<CreateAccountPage> {
                       : const Text('Create Account'),
                 ),
               ),
-              const SizedBox(height: 24),
-              _buildDivider(),
-              const SizedBox(height: 24),
-              _buildSocialButtons(),
               const SizedBox(height: 32),
               _buildLoginLink(),
             ],

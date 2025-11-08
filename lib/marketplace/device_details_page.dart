@@ -1,19 +1,30 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
 import 'package:google_fonts/google_fonts.dart';
 import 'package:mobiledev_ecowaste/theme.dart';
 import 'chat_page.dart';
 
-class DeviceDetailsPage extends StatelessWidget {
+class DeviceDetailsPage extends StatefulWidget {
   final Map<String, dynamic> device;
 
   const DeviceDetailsPage({super.key, required this.device});
+
+  @override
+  State<DeviceDetailsPage> createState() => _DeviceDetailsPageState();
+}
+
+class _DeviceDetailsPageState extends State<DeviceDetailsPage> {
+  int _imageIndex = 0;
+
+  Map<String, dynamic> get device => widget.device;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: CustomScrollView(
         slivers: [
-          _buildSliverAppBar(),
+          _buildSliverAppBar(context),
           _buildContent(),
         ],
       ),
@@ -36,9 +47,10 @@ class DeviceDetailsPage extends StatelessWidget {
     );
   }
 
-  SliverAppBar _buildSliverAppBar() {
-    final String imageUrl = device['imageUrl']!;
-    final ImageProvider imageProvider = imageUrl.startsWith('assets/') ? AssetImage(imageUrl) : NetworkImage(imageUrl);
+  SliverAppBar _buildSliverAppBar(BuildContext context) {
+    final List<dynamic>? imageUrlsDyn = device['image_urls'] as List<dynamic>?;
+    final List<String> imageUrls = imageUrlsDyn?.map((e) => e.toString()).toList() ?? [];
+    final String? singleImage = device['imageUrl'] as String?;
     return SliverAppBar(
       expandedHeight: 300.0,
       pinned: true,
@@ -57,7 +69,27 @@ class DeviceDetailsPage extends StatelessWidget {
         background: Stack(
           fit: StackFit.expand,
           children: [
-            Image( image: imageProvider, fit: BoxFit.cover, ),
+            if (imageUrls.isNotEmpty)
+              PageView.builder(
+                itemCount: imageUrls.length,
+                onPageChanged: (i) => setState(() => _imageIndex = i),
+                itemBuilder: (_, i) => Image.network(
+                  imageUrls[i],
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(color: Colors.grey.shade200, child: const Icon(Icons.broken_image, size: 80)),
+                ),
+              )
+            else if (singleImage != null)
+              Image(
+                image: singleImage.startsWith('assets/') ? AssetImage(singleImage) as ImageProvider : NetworkImage(singleImage),
+                fit: BoxFit.cover,
+              )
+            else
+              Container(
+                color: Colors.grey.shade200,
+                alignment: Alignment.center,
+                child: const Icon(Icons.devices, size: 80, color: Colors.grey),
+              ),
             Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -68,6 +100,25 @@ class DeviceDetailsPage extends StatelessWidget {
                 ),
               ),
             ),
+            if (imageUrls.length > 1)
+              Positioned(
+                bottom: 12,
+                left: 0,
+                right: 0,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(imageUrls.length, (i) => Container(
+                        width: 8,
+                        height: 8,
+                        margin: const EdgeInsets.symmetric(horizontal: 3),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: i == _imageIndex ? hirayaBlue : Colors.white70,
+                          border: Border.all(color: Colors.black12),
+                        ),
+                      )),
+                ),
+              ),
           ],
         ),
       ),
@@ -160,6 +211,12 @@ class DeviceDetailsPage extends StatelessWidget {
         children: [
           _buildSectionTitle('Specifications'),
           const SizedBox(height: 12),
+          if ((device['deviceType'] ?? device['device_type']) != null)
+            _buildDetailRow('Device Type', (device['deviceType'] ?? device['device_type']).toString()),
+          if (device['brand'] != null)
+            _buildDetailRow('Brand', device['brand'].toString()),
+          if (device['model'] != null)
+            _buildDetailRow('Model', device['model'].toString()),
           _buildDetailRow('Storage', device['storage'] ?? 'N/A'),
           _buildDetailRow('Color', device['color'] ?? 'N/A'),
         ],
@@ -199,6 +256,149 @@ class DeviceDetailsPage extends StatelessWidget {
           _buildDetailRow('Battery Drains Fast', formatAnswer(verification['batteryDrainsFast'] as bool?)),
           _buildDetailRow('Screen Has Damage', formatAnswer(verification['screenDamage'] as bool?)),
           _buildDetailRow('Touchscreen Responsive', formatAnswer(verification['touchResponsive'] as bool?)),
+          const SizedBox(height: 12),
+          _buildSectionTitle('Verification Proofs'),
+          const SizedBox(height: 8),
+          _buildProofs(verification),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProofs(Map<String, dynamic> verification) {
+    final batteryPhotoUrl =
+        verification['batteryPhotoUrl'] ?? device['batteryPhotoUrl'] ?? verification['battery_photo_url'] ?? device['battery_photo_url'];
+    final screenDamagePhotoUrl =
+        verification['screenDamagePhotoUrl'] ?? device['screenDamagePhotoUrl'] ?? verification['screen_damage_photo_url'] ?? device['screen_damage_photo_url'];
+    final functionalityVideoUrl =
+        verification['functionalityVideoUrl'] ?? device['functionalityVideoUrl'] ?? verification['functionality_video_url'] ?? device['functionality_video_url'];
+    final powersOnVideoUrl =
+        verification['powersOnVideoUrl'] ?? device['powersOnVideoUrl'] ?? verification['powers_on_video_url'] ?? device['powers_on_video_url'];
+    final buttonsVideoUrl =
+        verification['buttonsVideoUrl'] ?? device['buttonsVideoUrl'] ?? verification['buttons_video_url'] ?? device['buttons_video_url'];
+    final touchscreenVideoUrl =
+        verification['touchscreenVideoUrl'] ?? device['touchscreenVideoUrl'] ?? verification['touchscreen_video_url'] ?? device['touchscreen_video_url'];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (batteryPhotoUrl is String && batteryPhotoUrl.isNotEmpty) ...[
+          Text('Battery Photo', style: TextStyle(color: Colors.grey.shade700, fontSize: 16)),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Image.network(
+              batteryPhotoUrl,
+              height: 180,
+              width: double.infinity,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Container(
+                height: 180,
+                width: double.infinity,
+                color: Colors.grey.shade200,
+                alignment: Alignment.center,
+                child: const Icon(Icons.image_not_supported),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
+        if (screenDamagePhotoUrl is String && screenDamagePhotoUrl.isNotEmpty) ...[
+          Text('Screen Damage Photo', style: TextStyle(color: Colors.grey.shade700, fontSize: 16)),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Image.network(
+              screenDamagePhotoUrl,
+              height: 180,
+              width: double.infinity,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Container(
+                height: 180,
+                width: double.infinity,
+                color: Colors.grey.shade200,
+                alignment: Alignment.center,
+                child: const Icon(Icons.image_not_supported),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
+        if (functionalityVideoUrl is String && functionalityVideoUrl.isNotEmpty) ...[
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.videocam_outlined),
+            title: const Text('Functionality Video'),
+            subtitle: Text(functionalityVideoUrl, maxLines: 1, overflow: TextOverflow.ellipsis),
+            trailing: TextButton(
+              onPressed: () => _showLinkDialog(context, functionalityVideoUrl),
+              child: const Text('Open'),
+            ),
+          ),
+        ],
+        if (powersOnVideoUrl is String && powersOnVideoUrl.isNotEmpty) ...[
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.power_settings_new_outlined),
+            title: const Text('Powers On Video'),
+            subtitle: Text(powersOnVideoUrl, maxLines: 1, overflow: TextOverflow.ellipsis),
+            trailing: TextButton(
+              onPressed: () => _showLinkDialog(context, powersOnVideoUrl),
+              child: const Text('Open'),
+            ),
+          ),
+        ],
+        if (buttonsVideoUrl is String && buttonsVideoUrl.isNotEmpty) ...[
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.smart_button_outlined),
+            title: const Text('Buttons Functional Video'),
+            subtitle: Text(buttonsVideoUrl, maxLines: 1, overflow: TextOverflow.ellipsis),
+            trailing: TextButton(
+              onPressed: () => _showLinkDialog(context, buttonsVideoUrl),
+              child: const Text('Open'),
+            ),
+          ),
+        ],
+        if (touchscreenVideoUrl is String && touchscreenVideoUrl.isNotEmpty) ...[
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.touch_app_outlined),
+            title: const Text('Touchscreen Responsive Video'),
+            subtitle: Text(touchscreenVideoUrl, maxLines: 1, overflow: TextOverflow.ellipsis),
+            trailing: TextButton(
+              onPressed: () => _showLinkDialog(context, touchscreenVideoUrl),
+              child: const Text('Open'),
+            ),
+          ),
+        ],
+        if (!(batteryPhotoUrl is String && batteryPhotoUrl.isNotEmpty)
+            && !(screenDamagePhotoUrl is String && screenDamagePhotoUrl.isNotEmpty)
+            && !(functionalityVideoUrl is String && functionalityVideoUrl.isNotEmpty)
+            && !(powersOnVideoUrl is String && powersOnVideoUrl.isNotEmpty)
+            && !(buttonsVideoUrl is String && buttonsVideoUrl.isNotEmpty)
+            && !(touchscreenVideoUrl is String && touchscreenVideoUrl.isNotEmpty))
+          Text('No verification proofs provided.', style: TextStyle(color: Colors.grey.shade600)),
+      ],
+    );
+  }
+
+  void _showLinkDialog(BuildContext context, String url) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Open Video'),
+        content: SelectableText(url),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: url));
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Link copied to clipboard')));
+            },
+            child: const Text('Copy link'),
+          ),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
         ],
       ),
     );

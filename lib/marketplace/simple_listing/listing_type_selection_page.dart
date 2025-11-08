@@ -2,7 +2,9 @@
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'create_listing_page.dart';
+import 'package:provider/provider.dart';
+import 'package:mobiledev_ecowaste/marketplace/add_listing/listing_form_provider.dart';
+import 'package:mobiledev_ecowaste/marketplace/add_listing/add_listing_step1_page.dart';
 
 class ListingTypeSelectionPage extends StatelessWidget {
   const ListingTypeSelectionPage({super.key});
@@ -144,10 +146,21 @@ class ListingTypeSelectionPage extends StatelessWidget {
   }
 
   void _navigateToCreateListing(BuildContext context, String listingType) {
+    final initialType = {
+      'sell': ListingType.sell,
+      'trade': ListingType.trade,
+      'donate': ListingType.donate,
+    }[listingType] ?? ListingType.sell;
+
+    final provider = ListingFormProvider(initialListingType: initialType);
+
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => CreateListingPage(listingType: listingType),
+        builder: (_) => ChangeNotifierProvider.value(
+          value: provider,
+          child: const AddListingStep1Page(),
+        ),
       ),
     );
   }

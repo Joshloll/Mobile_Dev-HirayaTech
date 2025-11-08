@@ -19,6 +19,7 @@ class _FunctionalCommunityFeedPageState extends State<FunctionalCommunityFeedPag
   final _supabaseService = SupabaseService();
   List<Map<String, dynamic>> _posts = [];
   bool _isLoading = true;
+  final Set<String> _likedPostIds = {};
 
   @override
   void initState() {
@@ -37,14 +38,45 @@ class _FunctionalCommunityFeedPageState extends State<FunctionalCommunityFeedPag
         _isLoading = false;
       });
     }
+
+    // Load current user's reactions to set heart state
+    final user = _supabaseService.currentUser;
+    if (user != null) {
+      final liked = <String>{};
+      for (final p in posts) {
+        final postId = p['id'] as String;
+        final reactions = await _supabaseService.getPostReactions(postId);
+        if (reactions.any((r) => r['user_id'] == user.id)) {
+          liked.add(postId);
+        }
+      }
+      if (mounted) {
+        setState(() { _likedPostIds
+          ..clear()
+          ..addAll(liked);
+        });
+      }
+    }
   }
 
   Future<void> _toggleReaction(String postId) async {
-    await _supabaseService.addReaction(
-      postId: postId,
-      reactionType: 'like',
-    );
-    _loadPosts(); // Refresh to update counts
+    // Optimistic toggle
+    final idx = _posts.indexWhere((p) => p['id'] == postId);
+    if (idx != -1) {
+      final current = Map<String, dynamic>.from(_posts[idx]);
+      final liked = _likedPostIds.contains(postId);
+      final count = (current['reaction_count'] ?? 0) as int;
+      setState(() {
+        current['reaction_count'] = liked ? (count - 1).clamp(0, 1 << 31) : count + 1;
+        _posts[idx] = current;
+        if (liked) { _likedPostIds.remove(postId); } else { _likedPostIds.add(postId); }
+      });
+      if (liked) {
+        await _supabaseService.removeReaction(postId);
+      } else {
+        await _supabaseService.addReaction(postId: postId, reactionType: 'like');
+      }
+    }
   }
 
   @override
@@ -187,7 +219,10 @@ class _FunctionalCommunityFeedPageState extends State<FunctionalCommunityFeedPag
               Expanded(
                 child: TextButton.icon(
                   onPressed: () => _toggleReaction(postId),
-                  icon: const Icon(Icons.thumb_up_outlined),
+                  icon: Icon(
+                    _likedPostIds.contains(postId) ? Icons.favorite : Icons.favorite_border,
+                    color: _likedPostIds.contains(postId) ? Colors.red : null,
+                  ),
                   label: const Text('Like'),
                 ),
               ),

@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:mobiledev_ecowaste/services/supabase_service.dart';
 import 'package:intl/intl.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:mobiledev_ecowaste/profile/public_profile_page.dart';
 
 class ChatPage extends StatefulWidget {
   final String conversationId;
@@ -111,7 +113,19 @@ class _ChatPageState extends State<ChatPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.otherUserName),
+        automaticallyImplyLeading: true,
+        title: InkWell(
+          onTap: () {
+            Navigator.push(context, MaterialPageRoute(builder: (_) => PublicProfilePage(userId: widget.otherUserId)));
+          },
+          child: Row(
+            children: [
+              CircleAvatar(child: Text(widget.otherUserName.isNotEmpty ? widget.otherUserName[0].toUpperCase() : '?')),
+              const SizedBox(width: 12),
+              Expanded(child: Text(widget.otherUserName, overflow: TextOverflow.ellipsis)),
+            ],
+          ),
+        ),
         centerTitle: false,
       ),
       body: Column(
@@ -143,6 +157,28 @@ class _ChatPageState extends State<ChatPage> {
                       ),
           ),
 
+          // Pending image preview (if any)
+          if (_pendingImageUrl != null)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              child: Row(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.network(_pendingImageUrl!, width: 60, height: 60, fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => const Icon(Icons.broken_image)),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(child: Text('Image attached', maxLines: 1, overflow: TextOverflow.ellipsis)),
+                  IconButton(
+                    tooltip: 'Remove',
+                    onPressed: _isSending ? null : () => setState(() { _pendingImageUrl = null; }),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+            ),
           // Message input
           _buildMessageInput(),
         ],
@@ -184,13 +220,16 @@ class _ChatPageState extends State<ChatPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       if (imageUrl != null)
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
-                          child: Image.network(
-                            imageUrl,
-                            width: 220,
-                            fit: BoxFit.cover,
-                            errorBuilder: (c, e, s) => const Icon(Icons.broken_image),
+                        GestureDetector(
+                          onTap: () => _showImagePreview(imageUrl),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: Image.network(
+                              imageUrl,
+                              width: 220,
+                              fit: BoxFit.cover,
+                              errorBuilder: (c, e, s) => const Icon(Icons.broken_image),
+                            ),
                           ),
                         ),
                       if (content.isNotEmpty) ...[
@@ -269,7 +308,7 @@ class _ChatPageState extends State<ChatPage> {
             IconButton(
               tooltip: 'Attach image',
               onPressed: _isSending ? null : _pickAndUploadImage,
-              icon: const Icon(Icons.attachment),
+              icon: const Icon(Icons.image_outlined),
             ),
             Expanded(
               child: TextField(
@@ -313,17 +352,25 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   Future<void> _pickAndUploadImage() async {
-    // For web and mobile: delegate to SupabaseService uploadListingImageBytes/File pattern using a new helper
-    // Here we simply open the file picker using image_picker
-    // To keep dependencies minimal, we rely on a service helper to upload from a picked file
-    final url = await _supabaseService.pickAndUploadChatImage();
-    if (url != null) {
-      setState(() { _pendingImageUrl = url; });
-      // Auto-send if no text content
-      if (_messageController.text.trim().isEmpty) {
-        _sendMessage();
-      }
-    }
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 75);
+    if (picked == null) return;
+    final bytes = await picked.readAsBytes();
+    final ext = picked.name.contains('.') ? picked.name.split('.').last : 'jpg';
+    final url = await _supabaseService.uploadChatImageBytes(bytes, fileExt: ext);
+    if (url == null) return;
+    setState(() { _pendingImageUrl = url; });
+  }
+
+  void _showImagePreview(String url) {
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        child: InteractiveViewer(
+          child: Image.network(url, fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Icon(Icons.broken_image)),
+        ),
+      ),
+    );
   }
 
   String _formatTime(DateTime dateTime) {

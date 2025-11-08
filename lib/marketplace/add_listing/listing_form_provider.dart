@@ -5,7 +5,7 @@ enum ListingType { sell, trade, donate }
 
 class ListingFormProvider with ChangeNotifier {
   int _currentStep = 1;
-  final int _totalSteps = 3; // 1. Info -> 2. Details & Uploads -> 3. Review
+  final int _totalSteps = 5; // 1. Info -> 2. Type & Commercials -> 3. Inclusions & History -> 4. Photos & Verification -> 5. Review
 
   final bool isTypeLocked;
 
@@ -17,9 +17,13 @@ class ListingFormProvider with ChangeNotifier {
   String? color;
 
   // Step 2 Data
+  String? title;
+  String? description;
   ListingType listingType;
   double? price;
   String? tradeDetails;
+
+  // Step 3 Data
   List<String> includedAccessories = [];
   String? repairHistory;
 
@@ -36,6 +40,13 @@ class ListingFormProvider with ChangeNotifier {
   XFile? functionalityVideoProof;
   XFile? batteryPhotoProof;
 
+  // Per-question attachments (new)
+  XFile? powersOnProofVideo;
+  XFile? buttonsFunctionalProofVideo;
+  XFile? batteryDrainsFastProofPhoto;
+  XFile? screenDamageProofPhoto;
+  XFile? touchscreenResponsiveProofVideo;
+
   ListingFormProvider({ListingType? initialListingType})
       : listingType = initialListingType ?? ListingType.sell,
         isTypeLocked = initialListingType != null;
@@ -43,6 +54,9 @@ class ListingFormProvider with ChangeNotifier {
   int get currentStep => _currentStep;
   int get totalSteps => _totalSteps;
   double get progress => _currentStep / _totalSteps;
+
+  void updateTitle(String value) { title = value; notifyListeners(); }
+  void updateDescription(String value) { description = value; notifyListeners(); }
 
   void updateDeviceType(String? value) { deviceType = value; notifyListeners(); }
   void updateBrand(String? value) { brand = value; notifyListeners(); }
@@ -78,6 +92,22 @@ class ListingFormProvider with ChangeNotifier {
 
   Future<void> pickBatteryPhotoProof() async { final ImagePicker picker = ImagePicker(); batteryPhotoProof = await picker.pickImage(source: ImageSource.camera, imageQuality: 70); notifyListeners(); }
   void removeBatteryPhotoProof() { batteryPhotoProof = null; notifyListeners(); }
+
+  // New per-question pick/remove helpers
+  Future<void> pickPowersOnProofVideo() async { final ImagePicker picker = ImagePicker(); powersOnProofVideo = await picker.pickVideo(source: ImageSource.camera); notifyListeners(); }
+  void removePowersOnProofVideo() { powersOnProofVideo = null; notifyListeners(); }
+
+  Future<void> pickButtonsFunctionalProofVideo() async { final ImagePicker picker = ImagePicker(); buttonsFunctionalProofVideo = await picker.pickVideo(source: ImageSource.camera); notifyListeners(); }
+  void removeButtonsFunctionalProofVideo() { buttonsFunctionalProofVideo = null; notifyListeners(); }
+
+  Future<void> pickBatteryDrainsFastProofPhoto() async { final ImagePicker picker = ImagePicker(); batteryDrainsFastProofPhoto = await picker.pickImage(source: ImageSource.camera, imageQuality: 70); notifyListeners(); }
+  void removeBatteryDrainsFastProofPhoto() { batteryDrainsFastProofPhoto = null; notifyListeners(); }
+
+  Future<void> pickScreenDamageProofPhoto() async { final ImagePicker picker = ImagePicker(); screenDamageProofPhoto = await picker.pickImage(source: ImageSource.camera, imageQuality: 70); notifyListeners(); }
+  void removeScreenDamageProofPhoto() { screenDamageProofPhoto = null; notifyListeners(); }
+
+  Future<void> pickTouchscreenResponsiveProofVideo() async { final ImagePicker picker = ImagePicker(); touchscreenResponsiveProofVideo = await picker.pickVideo(source: ImageSource.camera); notifyListeners(); }
+  void removeTouchscreenResponsiveProofVideo() { touchscreenResponsiveProofVideo = null; notifyListeners(); }
 
   void nextStep() { if (_currentStep < _totalSteps) { _currentStep++; notifyListeners(); } }
   void previousStep() { if (_currentStep > 1) { _currentStep--; notifyListeners(); } }

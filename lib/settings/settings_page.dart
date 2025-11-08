@@ -34,8 +34,11 @@ class _SettingsPageState extends State<SettingsPage> {
           _buildNavigationTile(
             context: context,
             title: 'Edit Profile',
-            onTap: () {
-              Navigator.push(context, MaterialPageRoute(builder: (context) => const EditProfilePage()));
+            onTap: () async {
+              final changed = await Navigator.push(context, MaterialPageRoute(builder: (context) => const EditProfilePage()));
+              if (changed == true && mounted) {
+                Navigator.pop(context, true);
+              }
             },
           ),
           const SizedBox(height: 24),

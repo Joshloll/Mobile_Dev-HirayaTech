@@ -4,6 +4,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:mobiledev_ecowaste/services/auth_service.dart';
 import 'package:mobiledev_ecowaste/auth/create_account_page.dart';
+import 'package:mobiledev_ecowaste/theme.dart';
 
 class SignInPage extends StatefulWidget {
   const SignInPage({super.key});
@@ -62,7 +63,21 @@ class _SignInPageState extends State<SignInPage> {
           child: Column(
             children: [
               Center(
-                child: Image.asset('assets/images/logo_leaf.png', height: 120),
+                child: Column(
+                  children: [
+                    Image.asset('assets/images/logo_leaf.png', height: 120),
+                    const SizedBox(height: 12),
+                    Text(
+                      'HIRAYATECH',
+                      style: TextStyle(
+                        color: hirayaBlue,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 24,
+                        letterSpacing: 2,
+                      ),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 32),
               _buildTextField(
@@ -81,10 +96,7 @@ class _SignInPageState extends State<SignInPage> {
                       : const Text('Sign In'),
                 ),
               ),
-              const SizedBox(height: 24),
-              _buildDivider(),
-              const SizedBox(height: 24),
-              _buildSocialButtons(),
+              const SizedBox(height: 8),
               const SizedBox(height: 32),
               _buildSignUpLink(),
             ],

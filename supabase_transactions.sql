@@ -65,13 +65,9 @@ begin
     raise exception 'Listing not available';
   end if;
 
-  update public.listings set status = 'pending' where id = p_listing_id;
+  -- Keep listing active until seller confirmation
   insert into public.market_transactions(listing_id, type, status, seller_id, buyer_id)
   values (p_listing_id, 'sell', 'pending', v_listing.user_id, auth.uid()) returning id into v_tx_id;
-
-  -- MODIFICATION: Added listing_id
-  insert into public.notifications(user_id, title, body, listing_id)
-  values (v_listing.user_id, 'Purchase request', 'Someone wants to buy your item.', p_listing_id);
 
   return v_tx_id;
 end; $$ language plpgsql security definer;
@@ -93,9 +89,6 @@ begin
   insert into public.points_ledger(user_id, points, reason, related_id) values (v_tx.seller_id, 75, 'sell_completed', v_tx.listing_id);
   if v_tx.buyer_id is not null then
     insert into public.points_ledger(user_id, points, reason, related_id) values (v_tx.buyer_id, 75, 'buy_completed', v_tx.listing_id);
-    -- MODIFICATION: Added listing_id
-    insert into public.notifications(user_id, title, body, listing_id) 
-    values (v_tx.buyer_id, 'Sale confirmed', 'Your purchase was confirmed.', v_tx.listing_id);
   end if;
 end; $$ language plpgsql security definer;
 
@@ -113,12 +106,9 @@ begin
   if v_listing.listing_type <> 'trade' then raise exception 'Target is not trade'; end if;
   if v_listing.status <> 'active' or v_partner.status <> 'active' then raise exception 'One listing not available'; end if;
 
-  update public.listings set status = 'pending' where id in (p_listing_id, p_partner_listing_id);
+  -- Keep both listings active until confirmation
   insert into public.market_transactions(listing_id, type, status, seller_id, buyer_id, trade_partner_listing_id)
   values (p_listing_id, 'trade', 'pending', v_listing.user_id, v_partner.user_id, p_partner_listing_id) returning id into v_tx_id;
-  -- MODIFICATION: Added listing_id
-  insert into public.notifications(user_id, title, body, listing_id) 
-  values (v_listing.user_id, 'Trade proposal', 'You have a new trade proposal.', p_listing_id);
   return v_tx_id;
 end; $$ language plpgsql security definer;
 
@@ -139,9 +129,6 @@ begin
   insert into public.points_ledger(user_id, points, reason, related_id) values (v_tx.seller_id, 150, 'trade_completed', v_tx.listing_id);
   if v_tx.buyer_id is not null then
     insert into public.points_ledger(user_id, points, reason, related_id) values (v_tx.buyer_id, 150, 'trade_completed', v_tx.trade_partner_listing_id);
-    -- MODIFICATION: Added listing_id
-    insert into public.notifications(user_id, title, body, listing_id) 
-    values (v_tx.buyer_id, 'Trade confirmed', 'Your trade was confirmed.', v_tx.listing_id);
   end if;
 end; $$ language plpgsql security definer;
 
@@ -155,12 +142,8 @@ begin
   select * into v_listing from public.listings where id = p_listing_id for update;
   if v_listing is null or v_listing.listing_type <> 'donate' then raise exception 'Not a donation'; end if;
   if v_listing.status <> 'active' then raise exception 'Listing not available'; end if;
-  update public.listings set status = 'pending' where id = p_listing_id;
   insert into public.market_transactions(listing_id, type, status, seller_id, buyer_id)
   values (p_listing_id, 'donate', 'pending', v_listing.user_id, auth.uid()) returning id into v_tx_id;
-  -- MODIFICATION: Added listing_id
-  insert into public.notifications(user_id, title, body, listing_id) 
-  values (v_listing.user_id, 'Donation request', 'Someone requested your donation.', p_listing_id);
   return v_tx_id;
 end; $$ language plpgsql security definer;
 
@@ -179,9 +162,6 @@ begin
   insert into public.points_ledger(user_id, points, reason, related_id) values (v_tx.seller_id, 230, 'donation_confirmed', v_tx.listing_id);
   if v_tx.buyer_id is not null then
     insert into public.points_ledger(user_id, points, reason, related_id) values (v_tx.buyer_id, 150, 'donation_received', v_tx.listing_id);
-    -- MODIFICATION: Added listing_id
-    insert into public.notifications(user_id, title, body, listing_id) 
-    values (v_tx.buyer_id, 'Donation confirmed', 'Your donation request was confirmed.', v_tx.listing_id);
   end if;
 end; $$ language plpgsql security definer;
 
@@ -213,3 +193,9 @@ begin
   where id = p_tx_id;
 
   -- Re-activate the listing(s)
+  update public.listings set status = 'active' where id = v_tx.listing_id;
+  if v_tx.type = 'trade' and v_tx.trade_partner_listing_id is not null then
+    update public.listings set status = 'active' where id = v_tx.trade_partner_listing_id;
+  end if;
+
+end; $$ language plpgsql security definer;

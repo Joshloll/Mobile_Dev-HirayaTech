@@ -1,4 +1,4 @@
-package com.example.mobiledev_ecowaste
+package com.hirayatech.mobiledev_ecowaste
 
 import io.flutter.embedding.android.FlutterActivity
 

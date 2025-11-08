@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:mobiledev_ecowaste/community_feed/functional_community_feed_page.dart';
-import 'package:mobiledev_ecowaste/donate/donate_page.dart';
+// import 'package:mobiledev_ecowaste/donate/donate_page.dart';
+
 import 'package:mobiledev_ecowaste/impact/impact_page.dart';
 import 'package:mobiledev_ecowaste/profile/profile_page.dart';
 import 'package:mobiledev_ecowaste/widgets/app_drawer.dart';
@@ -9,6 +10,9 @@ import 'chats_list_page.dart';
 import 'simple_listing/listing_type_selection_page.dart';
 import 'simple_listing/listings_feed_page.dart';
 import 'transactions_page.dart';
+import 'package:provider/provider.dart';
+import 'add_listing/listing_form_provider.dart';
+import 'add_listing/add_listing_step2_type_page.dart';
 import 'all_devices_page.dart';
 import 'device_details_page.dart';
 
@@ -25,7 +29,7 @@ class _MarketplacePageState extends State<MarketplacePage> {
   final List<Widget> _pages = const <Widget>[
     ListingsFeedPage(),
     FunctionalCommunityFeedPage(),
-    DonatePage(),
+    TransactionsPage(),
     ImpactPage(),
     ProfilePage(),
   ];
@@ -44,7 +48,7 @@ class _MarketplacePageState extends State<MarketplacePage> {
         actions = []; // FAB is now in the community page itself
         break;
       case 2:
-        title = 'Donation Tracker';
+        title = 'Transactions';
         actions = [];
         break;
       case 3:
@@ -64,15 +68,6 @@ class _MarketplacePageState extends State<MarketplacePage> {
                 );
               },
             ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.receipt_long_outlined),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const TransactionsPage()),
-              );
-            },
           ),
         ];
         break;
@@ -106,24 +101,28 @@ class _MarketplacePageState extends State<MarketplacePage> {
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.storefront_outlined), activeIcon: Icon(Icons.storefront), label: 'Market'),
           BottomNavigationBarItem(icon: Icon(Icons.people_outline), activeIcon: Icon(Icons.people), label: 'Community'),
-          BottomNavigationBarItem(icon: Icon(Icons.volunteer_activism_outlined), activeIcon: Icon(Icons.volunteer_activism), label: 'Donate'),
+          BottomNavigationBarItem(icon: Icon(Icons.receipt_long_outlined), activeIcon: Icon(Icons.receipt_long), label: 'Transactions'),
           BottomNavigationBarItem(icon: Icon(Icons.show_chart_outlined), activeIcon: Icon(Icons.show_chart), label: 'Impact'),
           BottomNavigationBarItem(icon: Icon(Icons.person_outline), activeIcon: Icon(Icons.person), label: 'Profile'),
         ],
       ),
       floatingActionButton: _bottomNavIndex == 0
           ? FloatingActionButton.extended(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const ListingTypeSelectionPage(),
-            ),
-          );
-        },
-        label: const Text('List a Device'),
-        icon: const Icon(Icons.add),
-      )
+              onPressed: () {
+                final provider = ListingFormProvider();
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ChangeNotifierProvider.value(
+                      value: provider,
+                      child: const AddListingStep2TypePage(),
+                    ),
+                  ),
+                );
+              },
+              label: const Text('List a Device'),
+              icon: const Icon(Icons.add),
+            )
           : null,
     );
   }

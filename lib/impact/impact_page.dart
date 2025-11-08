@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:mobiledev_ecowaste/theme.dart'; // Import theme for colors
 import 'package:mobiledev_ecowaste/services/supabase_service.dart';
+import 'package:mobiledev_ecowaste/profile/public_profile_page.dart';
+import 'package:mobiledev_ecowaste/impact/badges_list_page.dart';
 
 class ImpactPage extends StatefulWidget {
   const ImpactPage({super.key});
@@ -60,7 +62,14 @@ class _ImpactPageState extends State<ImpactPage> {
             const SizedBox(height: 16),
             _buildStatsCards(),
             _buildNextBadgeProgress(context),
-            _buildSectionHeader('Badges Earned', 'View All', () {}),
+            _buildSectionHeader('Badges Earned', 'View All', () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => BadgesListPage(points: _points),
+                ),
+              );
+            }),
             _buildBadgesGrid(),
             _buildSectionHeader('Leaderboard', 'This Week', () {}),
             _buildLeaderboardList(),

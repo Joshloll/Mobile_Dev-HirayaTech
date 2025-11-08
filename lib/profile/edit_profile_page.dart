@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io' show File;
 import 'package:mobiledev_ecowaste/models/user_model.dart';
 import 'package:mobiledev_ecowaste/services/supabase_service.dart';
 
@@ -13,6 +16,7 @@ class EditProfilePage extends StatefulWidget {
 class _EditProfilePageState extends State<EditProfilePage> {
   bool _isLoading = true;
   bool _isSaving = false;
+  bool _uploadingAvatar = false;
 
   // Controllers to manage the text in the TextFields
   late TextEditingController _nameController;
@@ -21,7 +25,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
   final _supabaseService = SupabaseService();
   UserProfile? _userProfile;
-  // Note: avatar editing is disabled per requirements
+  String? _avatarUrl;
 
   @override
   void initState() {
@@ -33,6 +37,35 @@ class _EditProfilePageState extends State<EditProfilePage> {
     _loadUserProfile();
   }
 
+  Future<void> _pickAvatar() async {
+    final user = _supabaseService.currentUser;
+    if (user == null) return;
+    final ImagePicker picker = ImagePicker();
+    final XFile? picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+    if (picked == null) return;
+
+    setState(() { _uploadingAvatar = true; });
+    String? uploadedUrl;
+    if (kIsWeb) {
+      final bytes = await picked.readAsBytes();
+      uploadedUrl = await _supabaseService.uploadProfileImageBytes(user.id, bytes, fileExt: picked.name.split('.').last);
+    } else {
+      final file = File(picked.path);
+      uploadedUrl = await _supabaseService.uploadProfileImage(user.id, file);
+    }
+    if (!mounted) return;
+    setState(() { _uploadingAvatar = false; });
+
+    if (uploadedUrl != null && uploadedUrl.isNotEmpty) {
+      setState(() { _avatarUrl = uploadedUrl; });
+      await _supabaseService.updateUserProfile(userId: user.id, avatarUrl: uploadedUrl);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(backgroundColor: Colors.green, content: Text('Profile picture updated.')));
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(backgroundColor: Colors.red, content: Text('Failed to upload profile picture.')));
+    }
+  }
+
   Future<void> _loadUserProfile() async {
     final user = _supabaseService.currentUser;
     if (user != null) {
@@ -42,6 +75,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
         setState(() {
           _userProfile = UserProfile.fromJson(profileData);
           _nameController.text = _userProfile!.name;
+          _avatarUrl = _userProfile!.avatarUrl;
           _isLoading = false;
         });
       } else {
@@ -51,14 +85,23 @@ class _EditProfilePageState extends State<EditProfilePage> {
   }
 
   Future<void> _saveProfile() async {
-    if (_userProfile == null) return;
+    final authUser = _supabaseService.currentUser;
+    if (authUser == null) return;
 
     setState(() { _isSaving = true; });
 
-    // Update profile
+    // Ensure a profile row exists (useful after data wipes), then update
+    await _supabaseService.ensureProfile(
+      userId: authUser.id,
+      email: authUser.email ?? '',
+      name: _nameController.text.trim().isNotEmpty ? _nameController.text.trim() : (_userProfile?.name ?? 'User'),
+      avatarUrl: _avatarUrl,
+    );
+
     final error = await _supabaseService.updateUserProfile(
-      userId: _userProfile!.id,
+      userId: authUser.id,
       name: _nameController.text.trim(),
+      avatarUrl: (_avatarUrl != null && _avatarUrl!.isNotEmpty) ? _avatarUrl : null,
     );
 
     // Optional: update password
@@ -85,6 +128,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
             content: Text('Profile updated successfully!'),
           ),
         );
+        // Refresh local state and return
+        await _loadUserProfile();
         Navigator.of(context).pop(true); // Return true to indicate success
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -138,6 +183,44 @@ class _EditProfilePageState extends State<EditProfilePage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Center(
+                    child: Stack(
+                      alignment: Alignment.bottomRight,
+                      children: [
+                        CircleAvatar(
+                          radius: 48,
+                          backgroundImage: (_avatarUrl != null && _avatarUrl!.isNotEmpty)
+                              ? NetworkImage(_avatarUrl!)
+                              : null,
+                          child: (_avatarUrl == null || _avatarUrl!.isEmpty)
+                              ? const Icon(Icons.person, size: 48)
+                              : null,
+                        ),
+                        Positioned(
+                          right: 0,
+                          bottom: 0,
+                          child: InkWell(
+                            onTap: _uploadingAvatar ? null : _pickAvatar,
+                            child: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: const BoxDecoration(
+                                color: Color(0xFF3A86FF),
+                                shape: BoxShape.circle,
+                              ),
+                              child: _uploadingAvatar
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                    )
+                                  : const Icon(Icons.edit, color: Colors.white, size: 16),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
                   _buildTextField(label: 'Username', controller: _nameController),
                   const SizedBox(height: 16),
                   _buildPasswordFields(),

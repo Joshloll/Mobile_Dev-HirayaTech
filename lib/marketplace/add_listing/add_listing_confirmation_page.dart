@@ -33,11 +33,18 @@ class AddListingConfirmationPage extends StatelessWidget {
                 style: TextStyle(color: Colors.grey.shade600, fontSize: 16),
               ),
               const SizedBox(height: 48),
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.of(context).popUntil((route) => route.isFirst);
-                },
-                child: const Text('View My Listings'),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.of(context).popUntil((route) => route.isFirst);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 18),
+                    shape: const StadiumBorder(),
+                  ),
+                  child: const Text('View My Listings'),
+                ),
               ),
               const SizedBox(height: 16),
               TextButton(
